@@ -1,0 +1,957 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoPot-Meisteranleitung</title>
+    <style>
+        :root {
+            --bg-primary: #f9f9f9;
+            --bg-secondary: white;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --border-color: #ddd;
+            --accent-green: #2e7d32;
+            --accent-blue: #1565c0;
+            --accent-green-light: #e8f5e9;
+            --accent-green-dark: #1b5e20;
+            --accent-orange: #ff9800;
+            --accent-orange-dark: #e65100;
+            --accent-blue-light: #e3f2fd;
+            --accent-blue-dark: #0d47a1;
+            --box-text: #1b5e20;
+            --tip-text: #0d47a1;
+        }
+        
+        body.dark-mode {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #e0e0e0;
+            --text-secondary: #b0b0b0;
+            --border-color: #444;
+            --accent-green-light: #2a6f3d;
+            --accent-blue-light: #1e4d8b;
+            --box-text: #e8f5e9;
+            --tip-text: #e3f2fd;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .header-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        #darkModeToggle {
+            padding: 8px 16px;
+            border: 2px solid var(--accent-green);
+            background-color: var(--accent-green);
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        #darkModeToggle:hover {
+            background-color: var(--accent-green-dark);
+            border-color: var(--accent-green-dark);
+        }
+        
+        body.dark-mode #darkModeToggle {
+            background-color: #ffb74d;
+            border-color: #ffb74d;
+            color: #1a1a1a;
+        }
+        
+        body.dark-mode #darkModeToggle:hover {
+            background-color: #ffa726;
+        }
+        
+        .container {
+            background-color: var(--bg-secondary);
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.2);
+            transition: background-color 0.3s;
+        }
+        
+        h1 {
+            color: var(--accent-green);
+            border-bottom: 3px solid var(--accent-green);
+            padding-bottom: 10px;
+            font-size: 28px;
+            margin: 0 0 20px 0;
+        }
+        
+        h2 {
+            color: var(--accent-blue);
+            border-bottom: 2px solid var(--accent-blue);
+            padding-bottom: 8px;
+            margin-top: 40px;
+            margin-bottom: 15px;
+            font-size: 22px;
+        }
+        
+        h3 {
+            color: var(--accent-green);
+            margin-top: 25px;
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+        .quote {
+            background-color: var(--accent-green-light);
+            border-left: 4px solid var(--accent-green);
+            padding: 15px 20px;
+            margin: 20px 0;
+            font-style: italic;
+            color: var(--box-text);
+            border-radius: 4px;
+        }
+        .separator {
+            border: none;
+            border-top: 2px solid var(--border-color);
+            margin: 30px 0;
+        }
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        li {
+            margin: 8px 0;
+            color: var(--text-primary);
+        }
+        strong {
+            color: var(--accent-green-dark);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 14px;
+        }
+        th {
+            background-color: var(--accent-green-light);
+            color: var(--accent-green-dark);
+            font-weight: bold;
+            text-align: left;
+            padding: 12px 15px;
+            border: 1px solid var(--border-color);
+        }
+        td {
+            padding: 10px 15px;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+        tr:nth-child(even) {
+            background-color: var(--bg-primary);
+        }
+        tr:hover {
+            background-color: var(--accent-green-light);
+        }
+        .warning {
+            background-color: #fff3e0;
+            border-left: 4px solid var(--accent-orange);
+            padding: 15px 20px;
+            margin: 20px 0;
+            color: var(--accent-orange-dark);
+            border-radius: 4px;
+        }
+        body.dark-mode .warning {
+            background-color: #3a2a1a;
+        }
+        .tip {
+            background-color: var(--accent-blue-light);
+            border-left: 4px solid var(--accent-blue);
+            padding: 15px 20px;
+            margin: 20px 0;
+            color: var(--tip-text);
+            border-radius: 4px;
+        }
+        .rules-box {
+            background: linear-gradient(135deg, var(--accent-green-light) 0%, #c8e6c9 100%);
+            border: 2px solid var(--accent-green);
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            transition: background 0.3s;
+        }
+        
+        body.dark-mode .rules-box {
+            background: linear-gradient(135deg, #2a6f3d 0%, #1b5e20 100%);
+            border-color: #66bb6a;
+        }
+        
+        .rules-box h2 {
+            color: var(--box-text);
+            border-bottom: 2px solid var(--box-text);
+            margin-top: 0;
+        }
+        
+        .rules-box ol {
+            counter-reset: rule-counter;
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .rules-box li {
+            counter-increment: rule-counter;
+            margin: 12px 0;
+            padding-left: 35px;
+            position: relative;
+            color: var(--box-text);
+        }
+        
+        .rules-box li::before {
+            content: counter(rule-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: var(--accent-green);
+            color: white;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 25px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+                padding: 30px;
+            }
+            h1, h2, h3 {
+                color: #000;
+            }
+            .quote, .warning, .tip, .rules-box {
+                border: 1px solid #ccc;
+            }
+            #darkModeToggle {
+                display: none;
+            }
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+            .container {
+                padding: 25px;
+            }
+            .header-wrapper {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            h1 {
+                font-size: 24px;
+            }
+            h2 {
+                font-size: 20px;
+            }
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-wrapper">
+            <h1>AutoPot-Meisteranleitung</h1>
+            <button id="darkModeToggle">🌙 Dark Mode</button>
+        </div>
+        <h2>AirBase + AirDome auf 50/50 Coco/Perlite</h2>
+        
+        <div class="quote">
+            <strong>Kompakte, druckfreundliche Praxisanleitung für ein passives AutoPot-System mit mineralischer Nährlösung.</strong>
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>1. Das Ziel-Setup</h2>
+        <p><strong>Substrat:</strong> 50 % hochwertiges, vorgepuffertes Coco + 50 % grobes Perlite (etwa 3–6 mm).</p>
+        <p>Die Mischung kombiniert Wasserspeicherung und Kapillarität des Cocos mit der starken Belüftung sowie Drainage durch Perlite. Gerade bei permanenter Unterbewässerung ist ein lockeres, strukturstabiles Medium entscheidend.</p>
+        
+        <div class="tip">
+            <strong>Grundprinzip:</strong>
+            <ul>
+                <li>Die Pflanze soll sich das Wasser u über die Wurzeln selbst nehmen.</li>
+                <li>Der AquaValve lässt das Tray abwechselnd füllen und weitgehend leeren.</li>
+                <li>AirBase verbessert die Drainage am Topfboden.</li>
+                <li>AirDome bringt zusätzlich Luft in die Wurzelzone.</li>
+            </ul>
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>2. Material-Checkliste</h2>
+        <ul>
+            <li>AutoPot-Topf und zum Topf passende Tray</li>
+            <li>AquaValve und sauberer Filter am Tankausgang</li>
+            <li>Root Control Disc / Matrix-Disc</li>
+            <li>Passende AirBase</li>
+            <li>AirDome mit Luftschlauch und Rückschlagventil</li>
+            <li>Luftpumpe: nach Herstellerempfehlung passend zur Zahl der AirDomes</li>
+            <li>Coco, möglichst bereits gewaschen und Ca/Mg-vorgepuffert</li>
+            <li>Grobes, staubarmes Perlite</li>
+            <li>Mineralischer, vollständig wasserlöslicher Coco-/Hydro-Dünger</li>
+            <li>pH-Messgerät und EC-Messgerät plus Kalibrierlusungen</li>
+            <li>pH-Down, möglichst Phosphorsäure-basiert</li>
+            <li>Optional: CalMag, Siliziumprodukt, Enzyme</li>
+            <li>Sauberes Reservoir mit lichtdichtem Deckel</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>3. Coco vorbereiten</h2>
+        
+        <h3>Vorgepuffertes Coco</h3>
+        <p>Wenn auf dem Produkt ausdrücklich steht, dass es <strong>gewaschen und gepuffert</strong> ist, reicht üblicherweise gründliches Anfeuchten mit einer milden, pH-korrigierten Nährlösung.</p>
+        
+        <h3>Ungepuffertes Coco</h3>
+        <p>Ungepuffertes Coco kann Natrium und Kalium enthalten und anfangs Calcium sowie Magnesium binden. Daher zuerst waschen und mit einer Calcium-/Magnesium-haltigen Lö sung behandeln.</p>
+        
+        <div class="tip">
+            <strong>Praxisablauf:</strong>
+            <ol>
+                <li>Coco aufquellen lassen und mit sauberem Wasser durchspülen.</li>
+                <li>Mit einer moderaten CalMag-/Nährlösung vollständig durchfeuchten.</li>
+                <li>Mehrere Stunden bis über Nacht stehen lassen.</li>
+                <li>Mit leichter Nährlösung auf einen für Coco passenden EC-Wert einstellen.</li>
+                <li>Erst dann mit Perlite mischen.</li>
+            </ol>
+        </div>
+        
+        <div class="warning">
+            <strong>Wichtig:</strong> Ein falsch oder unzulänglich gepuffertes Coco zeigt häufig früh Ca-/Mg-ähnliche Mangel, obwohl die Nährlösung auf dem Papier ausreichend wirkt.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>4. AirBase und AirDome montieren</h2>
+        
+        <h3>Schichtenfolge</h3>
+        <ol>
+            <li>Root Control Disc mit der kupfer-/goldfarbenen Seite nach oben in den Topfboden legen.</li>
+            <li>AirBase auf die Disc setzen.</li>
+            <li>Bei AirDome-Nutzung das vorgesehene Mittelteil der AirBase entfernen.</li>
+            <li>AirDome einsetzen und den Luftschlauch durch die Nut der AirBase fu hren.</li>
+            <li>Die Kanäle der AirBase mit Substrat füllen bzw. Substrat leicht hineindrücken.</li>
+            <li>Mit 50/50 Coco/Perlite auffüllen, nicht stark verdichten.</li>
+        </ol>
+        
+        <div class="warning">
+            <strong>häufige Montagefehler:</strong>
+            <ul>
+                <li>AirBase-Kanäle bleiben leer: schlechtere Kapillarverbindung vom Tray ins Substrat.</li>
+                <li>Substrat wird stark festgedRückt: weniger Luftporen und schlechtere Wurzelentwicklung.</li>
+                <li>Luftschlauch wird geknickt oder eingeklemmt: ungleichmäßige Belüftung.</li>
+                <li>Root Control Disc fehlt oder liegt falsch: Höheres Risiko für Wurzeln im Tray.</li>
+            </ul>
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>5. AirDome richtig betreiben</h2>
+        <p>Der AirDome erga nzt die Substratluft durch aktive Belüftung im unteren Wurzelbereich. Er ist kein Ersatz für ein luftiges Medium; er arbeitet am besten in lockerem Coco/Perlite.</p>
+        
+        <h3>Start</h3>
+        <ul>
+            <li>Erst einschalten, wenn die Pflanze gut angewachsen und im Endtopf verwurzelt ist.</li>
+            <li>In der Regel ist das nach rund 2–3 Wochen im Endtopf sinnvoll.</li>
+            <li>für Jungpflanzen ist eine sehr feuchte, stark durchlüftete Wurzelzone nicht automatisch besser.</li>
+        </ul>
+        
+        <h3>Luftmanagement</h3>
+        <ul>
+            <li>Pumpe bevorzugt wa hrend der Beleuchtungsphase laufen lassen.</li>
+            <li>Rückschlagventil einbauen, besonders wenn Pumpe tiefer als die Topfe steht.</li>
+            <li>Ansaugluft sauber, nicht zu kalt und nicht zu heiß halten.</li>
+            <li>Starke, unkontrollierte Luftzufuhr vermeiden: Sie kann bei ungünstiger Schlauchführung den Ablauf des AquaValve stören.</li>
+        </ul>
+        
+        <h3>Wartung</h3>
+        <ul>
+            <li>Schlauch auf Kondenswasser, Knicke und Verstopfungen prüfen.</li>
+            <li>Ausstro mer/Verteiler bei nachlassender Leistung reinigen oder ersetzen.</li>
+            <li>Bei auffa lligem Wasserstand zuerst Luftzufuhr testweise ausschalten und AquaValve-Funktion prüfen.</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>6. Anwachsen vor dem Einschalten</h2>
+        <p>Ein häufiger Fehler ist, das System bei frisch eingetopften Pflanzen sofort zu aktivieren.</p>
+        
+        <div class="tip">
+            <strong>Bewa hrter Start:</strong>
+            <ol>
+                <li>Pflanze in den finalen AutoPot umsetzen.</li>
+                <li>für etwa 7–10 Tage von oben mit milder Nährlösung gießen.</li>
+                <li>Dabei den gesamten Wurzelballen gleichmäßig befeuchten, aber nicht dauerhaft durchnässen.</li>
+                <li>AutoPot einschalten, sobald die Pflanze sichtbar wa chst und Wurzeln den unteren Topfbereich erreichen.</li>
+            </ol>
+        </div>
+        
+        <p>Das Topwatering am Anfang sorgt dafür, dass Wurzeln aktiv in die Tiefe wachsen und später die Unterbewässerung zuverlässig nutzen.</p>
+        
+        <hr class="separator">
+        
+        <h2>7. pH, EC und WasserQualität</h2>
+        
+        <h3>Zielbereich</h3>
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Praktischer Zielbereich</th>
+            </tr>
+            <tr>
+                <td>pH im Tank</td>
+                <td>5,8–6,2</td>
+            </tr>
+            <tr>
+                <td>Wassertemperatur</td>
+                <td>18–22 °C</td>
+            </tr>
+            <tr>
+                <td>Substrat</td>
+                <td>locker, gleichmäßig feucht, nicht verdichtet</td>
+            </tr>
+            <tr>
+                <td>Tank</td>
+                <td>lichtdicht, sauber, möglichst kühl</td>
+            </tr>
+        </table>
+        
+        <h3>EC als Startpunkt</h3>
+        <p>EC hängt stark von Sorte, Lichtintensität, Klima, Wasserhärte und Dünger ab. Deshalb langsam starten und auf Blätter, Wachstum, Tankverbrauch und gegebenenfalls Runoff/Medium-EC reagieren.</p>
+        
+        <table>
+            <tr>
+                <th>Kulturphase</th>
+                <th>Konservativer EC-Startbereich</th>
+            </tr>
+            <tr>
+                <td>Jungpflanze / frühes Anwachsen</td>
+                <td>0,6–1,0</td>
+            </tr>
+            <tr>
+                <td>Etablierte Vegetationsphase</td>
+                <td>1,1–1,6</td>
+            </tr>
+            <tr>
+                <td>übergang / frühe Blüte</td>
+                <td>1,5–1,9</td>
+            </tr>
+            <tr>
+                <td>HauptBlüte, nur bei gesunden Pflanzen</td>
+                <td>1,8–2,3</td>
+            </tr>
+            <tr>
+                <td>Endphase</td>
+                <td>schrittweise reduzieren, abha ngig von Kulturziel und Pflanzensignalen</td>
+            </tr>
+        </table>
+        
+        <div class="warning">
+            <strong>Regel:</strong> Wenn Blattspitzen verbrennen, Blattkrallen zunehmen oder der EC im Wurzelbereich hochläuft, zuerst den EC senken und die Ursache prüfen – nicht noch mehr Zusätze geben.
+        </div>
+        
+        <h3>Messroutine</h3>
+        <ul>
+            <li>Tank-pH und Tank-EC beim Anmischen messen.</li>
+            <li>Nach einigen Stunden nochmals prüfen, besonders bei weichem Wasser, Zusätzen oder warmem Tank.</li>
+            <li>Messgera te mindestens regulär mit geeigneten Lo sungen kalibrieren.</li>
+            <li>A nderungen einzeln vornehmen: nicht gleichzeitig EC, Licht, Temperatur und Zusatzstoffe stark vera ndern.</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>8. Nährlösung im Reservoir</h2>
+        
+        <h3>Mischreihenfolge</h3>
+        <ol>
+            <li>Tank mit Wasser füllen.</li>
+            <li>Siliziumprodukt, falls genutzt, zuerst vollständig einmischen.</li>
+            <li>BasisDünger nach Herstellerreihenfolge einzeln zugeben und jedes Mal gut umru hren.</li>
+            <li>CalMag nur nach Bedarf bzw. Produktschema erga nzen.</li>
+            <li>Zusätze zuletzt einmischen.</li>
+            <li>EC kontrollieren.</li>
+            <li>pH als letzten Schritt einstellen.</li>
+        </ol>
+        
+        <div class="warning">
+            <strong>Nie Konzentrate direkt miteinander mischen.</strong> Das kann Ausfa llungen bilden und Filter, Leitungen oder AquaValves verstopfen.
+        </div>
+        
+        <h3>Mineralisch oder organisch?</h3>
+        <p>für ein AutoPot-System ist eine klare, mineralische, vollständig wasserlösliche Nährlösung am pflegeleichtesten. Organische Stoffe, dicke BioZusätze und stark mikrobiell aktive Mischungen können Biofilm erzeugen, Sauerstoff im Tank verbrauchen und Komponenten zusetzen.</p>
+        
+        <h3>Mikroben</h3>
+        <p>Mykorrhiza, Bacillus oder Trichoderma können im Wurzelbereich sinnvoll sein. Am sichersten werden sie beim Umtopfen direkt an die Wurzeln oder separat als Handanwendung von oben gegeben.</p>
+        
+        <div class="warning">
+            <strong>Nicht pauschal in den Tank geben</strong>, wenn der Hersteller nicht ausdrücklich die Eignung für Rezirkulations- bzw. Bewässerungssysteme besta tigt.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>9. Klima und VPD</h2>
+        <p>Mit dauerhaft verfügbarer Wasser- und Nä hrstoffversorgung kann die Pflanze hohe Lichtleistung umsetzen – aber nur bei passendem Klima.</p>
+        
+        <table>
+            <tr>
+                <th>Phase</th>
+                <th>Temperatur bei Licht</th>
+                <th>Relative Luftfeuchte</th>
+                <th>Richtwert VPD</th>
+            </tr>
+            <tr>
+                <td>Jungpflanze</td>
+                <td>24–26 °C</td>
+                <td>65–75 %</td>
+                <td>etwa 0,8–1,0 kPa</td>
+            </tr>
+            <tr>
+                <td>Vegetation</td>
+                <td>24–28 °C</td>
+                <td>55–70 %</td>
+                <td>etwa 1,0–1,3 kPa</td>
+            </tr>
+            <tr>
+                <td>frühe Blüte</td>
+                <td>24–27 °C</td>
+                <td>50–60 %</td>
+                <td>etwa 1,2–1,5 kPa</td>
+            </tr>
+            <tr>
+                <td>Spa te Blüte</td>
+                <td>22–26 °C</td>
+                <td>40–55 %</td>
+                <td>etwa 1,4–1,7 kPa</td>
+            </tr>
+        </table>
+        
+        <h3>Klima-Praxis</h3>
+        <ul>
+            <li>Umluft darf Blätter leicht bewegen, soll aber nicht dauerhaft punktuell auf eine Pflanze blasen.</li>
+            <li>Abluft und Entfeuchtung mu ssen die Luftfeuchte besonders in dichter Blüte zuverlässig begrenzen.</li>
+            <li>Große Temperaturstu rze bei Dunkelphase vermeiden; sie erhöhen Kondensations- und Schimmelrisiken.</li>
+            <li>Nicht nur Temperatur oder Luftfeuchte betrachten – beide gemeinsam bestimmen den VPD.</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>10. Licht ohne überforderung</h2>
+        <p>Mehr Licht steigert nur dann Wachstum, wenn Nä hrstoffversorgung, Wurzelgesundheit und Klima mitziehen.</p>
+        
+        <table>
+            <tr>
+                <th>Phase</th>
+                <th>PPFD-Orientierung</th>
+            </tr>
+            <tr>
+                <td>Jungpflanzen</td>
+                <td>200–350 µmol/m2/s</td>
+            </tr>
+            <tr>
+                <td>Vegetation</td>
+                <td>400–650 µmol/m2/s</td>
+            </tr>
+            <tr>
+                <td>frühe Blüte</td>
+                <td>650–850 µmol/m2/s</td>
+            </tr>
+            <tr>
+                <td>HauptBlüte ohne Zusätzliches CO2</td>
+                <td>meist 800–1.000 µmol/m2/s</td>
+            </tr>
+        </table>
+        
+        <h3>Praktische Regeln</h3>
+        <ul>
+            <li>Licht schrittweise erhöhen, nicht abrupt.</li>
+            <li>Bei Blattaufhellung oben, hochgerollten Blattra ndern oder sehr kurzen Internodien Abstand/Leistung prüfen.</li>
+            <li>Hohe PPFD-Werte ohne kontrolliertes Klima und ausreichende Nä hrstoffversorgung fu hren eher zu Stress als zu Mehrertrag.</li>
+            <li>gleichmäßiges Canopy ist effizienter als eine einzelne, sehr hohe Hauptspitze.</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>11. Training und Canopy-Management</h2>
+        
+        <h3>Photoperiodische Pflanzen</h3>
+        <ul>
+            <li>Topping nur bei sichtbar vitalen Pflanzen und mit ausreichender Erholungszeit vor der Blüte.</li>
+            <li>LST früh beginnen: Triebe sanft nach auß en fu hren, damit mehrere Triebe eine ähnliche Höhe erreichen.</li>
+            <li>Netz/SCROG nutzen, wenn du Fla che statt Höhe optimieren willst.</li>
+        </ul>
+        
+        <h3>Autoflower</h3>
+        <ul>
+            <li>Training möglichst stressarm halten.</li>
+            <li>frühes, sanftes LST ist meist besser kalkulierbar als spa tes, starkes Beschneiden.</li>
+            <li>Keine großen Eingriffe bei Pflanzen mit langsamem Start, Mangeln oder Hitze-/Lichtstress.</li>
+        </ul>
+        
+        <h3>Entlaubung</h3>
+        <ul>
+            <li>Entferne zuerst bescha digte, kranke oder dauerhaft beschattete Blätter.</li>
+            <li>Danach gezielt Blätter, die Luftfluss und Lichtverteilung stark blockieren.</li>
+            <li>Nie radikal in einer Sitzung: maximal moderat schneiden und Reaktion beobachten.</li>
+        </ul>
+        
+        <h3>Unteres Wachstum</h3>
+        <p>Nach dem Stretch lohnt es sich häufig, schwache untere Triebe und dauerhaft schattige Blütenansa tze zu entfernen. Das verbessert Luftbewegung und lenkt Ressourcen in das obere, gut beleuchtete Canopy.</p>
+        
+        <hr class="separator">
+        
+        <h2>12. Tank, Leitungen und AquaValve</h2>
+        
+        <h3>Tank-Management</h3>
+        <ul>
+            <li>Tank möglichst kühl, dunkel und auß erhalb direkter Lampenwa rme aufstellen.</li>
+            <li>Vor vollständigem Leerlaufen nachfüllen; ein Restvolumen stabilisiert EC und pH.</li>
+            <li>Nährlösung regulär frisch ansetzen, insbesondere bei warmen Bedingungen.</li>
+            <li>Filter am Tankausgang Wöchentlich ansehen und bei Schmutz sofort saubern.</li>
+        </ul>
+        
+        <h3>AquaValve: Funktionskontrolle</h3>
+        <p>Ein sauber funktionierender AquaValve arbeitet in Zyklen: Tray füllt sich, die Pflanze nutzt Wasser, Tray wird weitgehend leer, anschließend füllt er erneut.</p>
+        
+        <div class="tip">
+            <strong>Pu rfpunkte:</strong>
+            <ul>
+                <li>Trays absolut waagerecht aufstellen.</li>
+                <li>Beide Silikondichtungen mu ssen vorhanden, sauber und korrekt in ihren Aussparungen sitzen.</li>
+                <li>Kein Substrat, Perlite-Staub, Biofilm oder Salzkrusten im Ventil.</li>
+                <li>9-mm-Leitung ohne Knick, Quetschung oder Undichtigkeit verlegen.</li>
+            </ul>
+        </div>
+        
+        <h3>Wenn ein Tray dauerhaft voll bleibt</h3>
+        <ol>
+            <li>Wasserzufuhr schließen.</li>
+            <li>Tray so weit wie möglich leeren lassen.</li>
+            <li>AquaValve vorsichtig ausbauen und alle Bauteile reinigen.</li>
+            <li>Dichtungen trocken und korrekt einsetzen.</li>
+            <li>Ventil wieder einsetzen und zuna chst beobachten.</li>
+            <li>Bei mehreren Topfen prüfen, ob nur ein Ventil oder der gesamte Zulauf betroffen ist.</li>
+        </ol>
+        
+        <h3>Wenn ein Tray nicht füllt</h3>
+        <ul>
+            <li>Tankventil geo ffnet?</li>
+            <li>Tank ausreichend gefüllt?</li>
+            <li>Filter frei?</li>
+            <li>Leitung geknickt, schlecht gesteckt oder undicht?</li>
+            <li>AquaValve korrekt auf seinem Anschluss montiert?</li>
+            <li>Trays waagerecht?</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>13. Drybacks sinnvoll nutzen</h2>
+        <p>Bei 50/50 Coco/Perlite ist ein dauerhafter Trockenstress normalerweise nicht no tig. Das AutoPot-System arbeitet gerade deshalb gut, weil Wasser konstant verfügbar ist.</p>
+        
+        <p>Optionale, vorsichtige Trockenphasen können dennoch nu tzlich sein, wenn:</p>
+        <ul>
+            <li>das Medium dauerhaft extrem nass wirkt,</li>
+            <li>Pflanzen trotz korrektem Klima tra ge reagieren,</li>
+            <li>eine starke EC-Anreicherung im Medium vermutet wird,</li>
+            <li>du kurz vor einer Handanwendung arbeiten musst.</li>
+        </ul>
+        
+        <div class="tip">
+            <strong>Sicherer Ansatz:</strong> Wasserzufuhr vorübergehend schließen, Topfgewicht und Pflanzensignale beobachten und wieder aktivieren, bevor die Pflanze deutlichen Durststress zeigt. Keine starren 24-Stunden-Regeln: Topfgröße, Pflanzenmasse, Temperatur und VPD entscheiden.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>14. Salzmanagement und Runoff</h2>
+        <p>AutoPot ist kein klassisches Drain-to-Waste-System. Dadurch musst du Salzansammlungen aktiv beobachten, aber nicht unnötig mit aggressiven Spu laktionen reagieren.</p>
+        
+        <h3>Warnzeichen für zu viel Salz</h3>
+        <ul>
+            <li>verbrannte Spitzen, die fortschreiten</li>
+            <li>sehr dunkle, gekrallte Blätter</li>
+            <li>schlechter Wasserverbrauch trotz ausreichender Beleuchtung</li>
+            <li>weißliche Krusten, kombiniert mit Pflanzensymptomen</li>
+            <li>hoher EC im Vergleich zur Tanklo sung, falls du eine Substratprobe misst</li>
+        </ul>
+        
+        <h3>Korrektur</h3>
+        <ol>
+            <li>Ursache suchen: zu hoher Tank-EC, zu warmes Klima, falscher pH, ungleichmäßige Bewässerung oder ungeeignete Zusätze.</li>
+            <li>Tank-EC moderat absenken.</li>
+            <li>Bei starkem Verdacht Wasserzufuhr abstellen und von oben langsam mit milder, pH-passender Lö sung durchfeuchten; dabei kontrollierten Ablauf auffangen.</li>
+            <li>Anschließend normal, aber mit niedrigerem EC weiterfu hren.</li>
+        </ol>
+        
+        <div class="warning">
+            Nicht reflexartig nur mit reinem Wasser fluten: Ein abrupter Nä hrstoffentzug kann Zusätzliche Mangel verursachen.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>15. Diagnose: Blattbild richtig lesen</h2>
+        
+        <table>
+            <tr>
+                <th>Beobachtung</th>
+                <th>häufige Ursachen</th>
+                <th>Erste sinnvolle prüfung</th>
+            </tr>
+            <tr>
+                <td>Verbrannte Blattspitzen</td>
+                <td>EC zu hoch, Salzaufbau, zu starkes Licht</td>
+                <td>Tank-EC, Blattspitzen, Medium-EC, PPFD</td>
+            </tr>
+            <tr>
+                <td>Helle neue Triebe</td>
+                <td>pH auß erhalb Bereich, Ca-/Mg-Thema, Eisenverfügbarkeit, Lichtstress</td>
+                <td>pH, Wasserhärte, Coco-Buffering, Lampenabstand</td>
+            </tr>
+            <tr>
+                <td>Dunkle Krallen</td>
+                <td>zu viel Stickstoff, EC zu hoch, Wurzelstress</td>
+                <td>Tank-EC, Wassertemperatur, nasses/dichtes Medium</td>
+            </tr>
+            <tr>
+                <td>Ha ngende Blätter bei nassem Topf</td>
+                <td>Sauerstoffmangel, zu dichter Rootzone, kaltes Wasser</td>
+                <td>AirBase/AirDome, Temperatur, Perlite-Anteil</td>
+            </tr>
+            <tr>
+                <td>Ha ngende Blätter bei leichtem Topf</td>
+                <td>Unterversorgung, Zulauf-/Ventilproblem</td>
+                <td>Tray-Wasserstand, Leitung, AquaValve, Tank</td>
+            </tr>
+            <tr>
+                <td>Lokale Flecken / trockene Ra nder</td>
+                <td>CalMag-/pH-Thema, Salz, Schädlinge</td>
+                <td>Blattunterseiten, pH/EC, Coco-Vorbereitung</td>
+            </tr>
+        </table>
+        
+        <div class="tip">
+            Ein einzelnes Blatt ist kein Diagnosebeweis. Entscheidend ist, ob neue Symptome auftreten, an welcher Pflanzenzone sie beginnen und wie sich die Pflanze über mehrere Tage entwickelt.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>16. Schädlings- und Schimmelprävention</h2>
+        <ul>
+            <li>Neue Pflanzen vor dem Einbringen kontrollieren und bei Bedarf getrennt halten.</li>
+            <li>Gelbtafeln helfen bei der frühen Erkennung fliegender Schädlinge.</li>
+            <li>Blattunterseiten regulär mit Lupe prüfen.</li>
+            <li>Keine stehende Nässe in Trays, keine abgestorbenen Blätter auf dem Substrat.</li>
+            <li>In dichter Blüte Luftfeuchte zuverlässig kontrollieren und Luftbewegung durch das Canopy ermöglichen.</li>
+            <li>Werkzeuge, Scheren und Tropf-/Tankkomponenten sauber halten.</li>
+        </ul>
+        
+        <div class="warning">
+            Bei Befall zuerst Art und Ausmaß sicher bestimmen. Ungezielte Spritzmittel können Blüten, Nützlinge und die eigene Gesundheit beeinträchtigen.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>17. Wochenroutine</h2>
+        
+        <h3>Täglich</h3>
+        <ul>
+            <li>Pflanzenbild: Blattstellung, Spitzen, Farbe, neue Symptome</li>
+            <li>Temperatur, Luftfeuchte und VPD</li>
+            <li>Tankfüllstand</li>
+            <li>Sichtprüfung der Trays auf korrekten Wasserzyklus</li>
+            <li>Luftpumpe und AirDome-Geräusch/Luftstrom prüfen</li>
+        </ul>
+        
+        <h3>Wöchentlich</h3>
+        <ul>
+            <li>Tank-pH, Tank-EC und Wassertemperatur dokumentieren</li>
+            <li>Tankfilter reinigen</li>
+            <li>Leitungen und Anschlüsse auf Lecks prüfen</li>
+            <li>AquaValve-außenseite und Trays saubern</li>
+            <li>Schädlinge mit Lupe und Gelbtafeln prüfen</li>
+            <li>pH-/EC-Meter nach Herstellerangabe kalibrieren</li>
+        </ul>
+        
+        <h3>Zwischen Durchgängen</h3>
+        <ul>
+            <li>Tank vollständig leeren und reinigen</li>
+            <li>Leitungen mit sauberem Wasser durchspülen</li>
+            <li>AquaValves zerlegen, saubern und Dichtungen kontrollieren</li>
+            <li>Root Control Discs prüfen/bei Bedarf ersetzen</li>
+            <li>AirDome-Schläuche und LuftAnschlüsse reinigen</li>
+        </ul>
+        
+        <hr class="separator">
+        
+        <h2>18. Praxis-Protokoll zum Mitschreiben</h2>
+        
+        <table>
+            <tr>
+                <th>Datum</th>
+                <th>Phase</th>
+                <th>Tank-EC</th>
+                <th>Tank-pH</th>
+                <th>Wassertemp.</th>
+                <th>Temp./rF</th>
+                <th>VPD</th>
+                <th>Licht/PPFD</th>
+                <th>Verbrauch</th>
+                <th>Beobachtung / Maßnahme</th>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+            </tr>
+            <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+            </tr>
+        </table>
+        
+        <div class="tip">
+            Das Protokoll zeigt nach wenigen Durchgängen, welche EC-, Klima- und Lichtkombination mit deiner Genetik, Topfgröße und deinem Wasser am besten funktioniert.
+        </div>
+        
+        <hr class="separator">
+        
+        <h2>19. Schnell-Check bei Problemen</h2>
+        <ol>
+            <li>Ist der Tank voll genug, kühl, lichtdicht und sauber?</li>
+            <li>Stimmen Tank-pH und Tank-EC?</li>
+            <li>Sind alle Trays exakt waagerecht?</li>
+            <li>füllen und leeren die AquaValves zyklisch?</li>
+            <li>Sind Filter, Leitungen und Anschlüsse frei und dicht?</li>
+            <li>Ist der AirDome-Schlauch offen, nicht geknickt und mit Rückschlagventil gesichert?</li>
+            <li>Ist das Substrat locker genug und waren die AirBase-Kanäle mit Medium gefüllt?</li>
+            <li>Sind Temperatur, Luftfeuchte, VPD und PPFD tatsächlich im Zielbereich?</li>
+            <li>Ist es ein Nä hrstoffproblem – oder eigentlich ein pH-, Klima-, Licht- oder Wurzelproblem?</li>
+            <li>Nur eine Veränderung auf einmal machen und 24–72 Stunden bewerten.</li>
+        </ol>
+        
+        <hr class="separator">
+        
+        <div class="rules-box">
+            <h2>20. Die wichtigsten Regeln in zehn Zeilen</h2>
+            <ol>
+                <li>Coco immer gewaschen und gepuffert einsetzen.</li>
+                <li>50/50 Coco/Perlite locker einfüllen, nicht verdichten.</li>
+                <li>AirBase-Kanäle mit Substrat füllen, damit die Kapillarwirkung stimmt.</li>
+                <li>Jungpflanzen zuerst von oben etablieren, AutoPot nicht zu früh einschalten.</li>
+                <li>pH im Tank meist bei 5,8–6,2 halten.</li>
+                <li>EC konservativ starten und nur anhand gesunder Pflanzensignale erhöhen.</li>
+                <li>Mineralische, klare Nährlösung ist im Tank am zuverlässigsten.</li>
+                <li>Tank kühl, dunkel, sauber und nie unnötig leer halten.</li>
+                <li>Trays waagerecht halten und AquaValves sauber warten.</li>
+                <li>Klima, Licht und Wurzeln entscheiden gemeinsam über Ertrag – nicht ein einzelner Booster.</li>
+            </ol>
+        </div>
+    </div>
+    
+    <script>
+        // Dark Mode Functionality
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const htmlBody = document.body;
+        
+        // Check localStorage for saved preference
+        const savedMode = localStorage.getItem('darkMode');
+        if (savedMode === 'enabled') {
+            htmlBody.classList.add('dark-mode');
+            updateToggleButton();
+        }
+        
+        // Toggle dark mode on button click
+        darkModeToggle.addEventListener('click', function() {
+            htmlBody.classList.toggle('dark-mode');
+            
+            // Save preference
+            if (htmlBody.classList.contains('dark-mode')) {
+                localStorage.setItem('darkMode', 'enabled');
+            } else {
+                localStorage.setItem('darkMode', 'disabled');
+            }
+            
+            updateToggleButton();
+        });
+        
+        function updateToggleButton() {
+            if (htmlBody.classList.contains('dark-mode')) {
+                darkModeToggle.textContent = '☀️ Light Mode';
+            } else {
+                darkModeToggle.textContent = '🌙 Dark Mode';
+            }
+        }
+        
+        // Optional: Use system preference if no saved preference
+        if (!savedMode && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            htmlBody.classList.add('dark-mode');
+            localStorage.setItem('darkMode', 'enabled');
+            updateToggleButton();
+        }
+    </script>
+</body>
+</html>
+
+
+

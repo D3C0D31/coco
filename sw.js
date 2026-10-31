@@ -1,6 +1,6 @@
 /* Service Worker: macht App und Anleitung offline nutzbar (nur über http/https, nicht bei file://).
    Strategie: Cache zuerst, im Hintergrund aktualisieren. Version hochzählen, wenn sich Dateien ändern. */
-const CACHE = 'autopot-v3-2';
+const CACHE = 'autopot-v4-1';
 const ASSETS = ['./', 'app.html', 'anleitung.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

@@ -245,6 +245,28 @@
         table { font-size: 12px; }
         th, td { padding: 8px 10px; }
     }
+
+    /* ---- Design-Update: gleiche Optik wie die App ---- */
+    :root { --bg-primary:#eef4ef; --bg-secondary:#ffffff; --text-primary:#13201a; --text-secondary:#546457; --border-color:#d4e1d7;
+        --accent-green:#1a8a3a; --accent-green-dark:#115a28; --accent-green-light:#e2f4e6; --grad:linear-gradient(135deg,#17803a,#0a7c93); --on-accent:#fff;
+        --aurora1:rgb(34 197 94/18%); --aurora2:rgb(6 182 212/16%); --aurora3:rgb(139 92 246/10%); }
+    :root[data-theme="dark"] { --bg-primary:#09100c; --bg-secondary:#121b16; --text-primary:#e8f1ea; --text-secondary:#9fb3a4; --border-color:#27392e;
+        --accent-green:#5fd37a; --accent-green-dark:#a6f0b8; --accent-green-light:#173a22; --grad:linear-gradient(135deg,#5fd37a,#46d0e8); --on-accent:#04210f;
+        --aurora1:rgb(34 197 94/14%); --aurora2:rgb(6 182 212/12%); --aurora3:rgb(139 92 246/12%); }
+    @media (prefers-color-scheme: dark) { :root:not([data-theme]) { --bg-primary:#09100c; --bg-secondary:#121b16; --text-primary:#e8f1ea; --text-secondary:#9fb3a4; --border-color:#27392e;
+        --accent-green:#5fd37a; --accent-green-dark:#a6f0b8; --accent-green-light:#173a22; --grad:linear-gradient(135deg,#5fd37a,#46d0e8); --on-accent:#04210f;
+        --aurora1:rgb(34 197 94/14%); --aurora2:rgb(6 182 212/12%); --aurora3:rgb(139 92 246/12%); } }
+    body { font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; max-width: 960px;
+        background: radial-gradient(900px 500px at 8% -5%,var(--aurora1),transparent 60%),radial-gradient(800px 500px at 100% 0,var(--aurora2),transparent 60%),radial-gradient(700px 600px at 50% 110%,var(--aurora3),transparent 60%),var(--bg-primary); background-attachment: fixed; }
+    .container { border-radius: 22px; border: 1px solid var(--border-color); box-shadow: 0 12px 34px rgba(20,50,30,.12); }
+    .btn { border-radius: 999px; border: 1px solid transparent; background: var(--grad); color: var(--on-accent); padding: 8px 16px; }
+    :root:not([x1]):not([x2]):not([x3]) .btn { color: var(--on-accent); }
+    :root:not([x1]):not([x2]):not([x3]) .btn.alt { background: transparent; color: var(--accent-green); border: 1px solid var(--border-color); }
+    .container h2 { display: flex; align-items: center; gap: 10px; border-bottom: 0; }
+    .container h2::before { content: ""; flex: none; width: 5px; height: 1.1em; background: var(--grad); border-radius: 4px; }
+    .toc a { border-radius: 999px; }
+    table { border-radius: 12px; overflow: hidden; }
+    @media (max-width: 640px) { .container { padding: 20px; border-radius: 16px; } body { padding: 10px; } }
 </style>
 </head>
 <body>

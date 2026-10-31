@@ -54,6 +54,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   };
   const rowsCount = () => page.locator('#logBody tr').count();
   const download = async click => { const [d] = await Promise.all([page.waitForEvent('download'), click()]); const p = path.join(TMP, d.suggestedFilename()); await d.saveAs(p); return p; };
+  const viaData = sel => download(async () => { await page.click('#dataBtn'); await page.click(sel); });
   const pngPath = path.join(TMP, 'foto.png');
   fs.writeFileSync(pngPath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
 
@@ -111,9 +112,9 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   ok((await page.locator('#logBody img.thumb').count()) === 1, 'Foto: überlebt Neuladen');
 
   /* Backup mit Foto → alles löschen → Import stellt Foto wieder her */
-  const bkPath = await download(() => page.click('#backupJson'));
+  const bkPath = await viaData('#backupJson');
   const bj = JSON.parse(fs.readFileSync(bkPath, 'utf8'));
-  ok(bj.version === 3 && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v3, enthält das Foto');
+  ok(bj.version === 4 && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v4, enthält das Foto');
   await wipe();
   ok((await rowsCount()) === 1 && (await page.textContent('#logBody')).includes('Noch keine'), 'Foto: Speicher komplett geleert');
   await page.setInputFiles('#importFile', bkPath);
@@ -147,7 +148,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   ok(!(await page.locator('#tip').isVisible()), 'Diagramm: Tooltip verschwindet');
 
   /* ---------- CSV ---------- */
-  const csvPath = await download(() => page.click('#exportCsv'));
+  const csvPath = await viaData('#exportCsv');
   const csv = fs.readFileSync(csvPath, 'utf8');
   ok(csv.startsWith('﻿"Datum";"Phase"') && csv.includes('\r\n') && csv.includes('"2026-10-02";"Vegetation";"0,7"'), 'CSV: BOM, Header, CRLF, Dezimalkomma');
   await page.setInputFiles('#importFile', csvPath);
@@ -213,6 +214,81 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   await page.goto(base + '/anleitung.html');
   ok((await page.locator('h2[id^="k"]').count()) === 20, 'PWA: Anleitung lädt offline');
   await ctx.setOffline(false);
+
+
+  /* ---------- Neue Funktionen (v4) ---------- */
+  await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');
+  await wipe();
+  const isoDay = off => page.evaluate(o => { const d = new Date(); d.setDate(d.getDate() + o); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }, off);
+  ok((await page.textContent('#heroDay')).includes('Noch kein Start'), 'v4: Hero ohne Startdatum');
+  await page.fill('#sStart', await isoDay(-10));
+  ok(/Tag 11 · Woche 2/.test(await page.textContent('#heroDay')), 'v4: Tag-/Wochenzähler (' + (await page.textContent('#heroDay')) + ')');
+  await page.selectOption('#sPhase', 'Hauptblüte');
+  ok((await page.textContent('#eventList')).includes('Phase: Hauptblüte') && /Blüte/.test(await page.textContent('#phaseSteps li.now')), 'v4: Phasenwechsel erzeugt Timeline-Ereignis und Stepper');
+  await page.fill('#fEc', '2.0'); await page.fill('#fPh', '6.0'); await page.fill('#fAir', '24'); await page.fill('#fRh', '50'); await page.fill('#fHeight', '12.5');
+  await page.click('[data-tag="Gedüngt"]');
+  ok((await page.inputValue('#fTags')).includes('Gedüngt'), 'v4: Schnell-Tag wird eingetragen');
+  await page.setInputFiles('#fPhoto', pngPath);
+  await page.waitForSelector('#photoPreview:not(.hidden)');
+  await page.click('#saveEntry'); await page.waitForTimeout(300);
+  ok((await page.textContent('#scoreVal')) === '100', 'v4: Grow-Score 100 bei Werten im Ziel');
+  ok((await page.textContent('#streakVal')).includes('1 Tag'), 'v4: Messserie');
+  await page.fill('#fDate', await isoDay(-1)); await page.fill('#fNote', 'Wurzeln prüfen'); await page.fill('#fEc', '2.1');
+  await page.click('#saveEntry'); await page.waitForTimeout(200);
+  ok((await rowsCount()) === 2 && (await page.textContent('#streakVal')).includes('2 Tage'), 'v4: zweiter Eintrag, Serie 2 Tage');
+  await page.fill('#lSearch', 'wurzeln');
+  ok((await rowsCount()) === 1 && (await page.textContent('#logCount')).includes('1 von 2'), 'v4: Protokoll-Suche filtert');
+  await page.fill('#lSearch', '');
+  await page.check('#lPhoto');
+  ok((await rowsCount()) === 1 && (await page.locator('#logBody img.thumb').count()) === 1, 'v4: Filter „nur mit Foto“');
+  await page.uncheck('#lPhoto');
+  ok((await page.locator('#galleryGrid .gthumb').count()) === 1, 'v4: Galerie zeigt das Foto');
+  await page.click('#galleryGrid .gthumb');
+  ok(await page.evaluate(() => document.getElementById('lightbox').open), 'v4: Lightbox öffnet');
+  await page.keyboard.press('Escape');
+  ok(!(await page.evaluate(() => document.getElementById('lightbox').open)), 'v4: Lightbox schließt per Escape');
+  await page.click('#rangeSeg [data-range="7"]');
+  ok((await page.getAttribute('#rangeSeg [data-range="7"]', 'aria-pressed')) === 'true' && (await page.evaluate(() => localStorage.getItem('autopot-range'))) === '7', 'v4: Diagramm-Zeitraum gewählt und gespeichert');
+  ok((await page.textContent('#cHeight ~ *, #charts')).includes('12,5'), 'v4: Höhe erscheint im Diagrammbereich');
+  ok((await page.locator('#vpdMap td').count()) === 77 && (await page.locator('#vpdMap td.now').count()) === 1, 'v4: VPD-Heatmap mit Markierung des letzten Eintrags');
+  ok((await page.textContent('#dOut')).includes('38,9'), 'v4: DLI (600 µmol, 18 h = 38,9)');
+  await page.selectOption('#ppScale', '700');
+  ok((await page.inputValue('#ppPpm')) === '1120', 'v4: EC→PPM (1,6 × 700)');
+  await page.fill('#ppPpm', '1400');
+  ok((await page.inputValue('#ppEc')) === '2', 'v4: PPM→EC');
+  await page.fill('#sTankRest', '5');
+  await page.click('#tankChange');
+  ok((await page.inputValue('#sTankRest')) === (await page.inputValue('#sTankSize')) && (await page.textContent('#eventList')).includes('Tank gewechselt') && (await page.textContent('#tankInfo')).includes('heute'), 'v4: „Tank gewechselt“ füllt den Tank und notiert das Ereignis');
+  await page.fill('#hDate', await isoDay(0)); await page.fill('#hWet', '100'); await page.fill('#hDry', '25'); await page.fill('#hWatt', '100');
+  const hout = await page.textContent('#hOut');
+  ok(hout.includes('75 %') && hout.includes('0,25 g/W'), 'v4: Ernte-Auswertung (' + hout.replace(/\s+/g, ' ').slice(0, 90) + ')');
+  const csv2 = fs.readFileSync(await viaData('#exportCsv'), 'utf8');
+  ok(csv2.split('\r\n')[0].endsWith('"Höhe"') && csv2.includes('"12,5"'), 'v4: CSV enthält Spalte Höhe');
+  await page.click('#dataBtn');
+  ok(await page.evaluate(() => document.getElementById('dataDlg').open), 'v4: Daten-Dialog öffnet');
+  await page.keyboard.press('Escape');
+  ok(!(await page.evaluate(() => document.getElementById('dataDlg').open)), 'v4: Daten-Dialog schließt per Escape');
+  /* Grow abschließen */
+  await viaNewGrow();
+  async function viaNewGrow() {
+    await download(() => page.click('#newGrow'));
+    await page.waitForTimeout(300);
+  }
+  ok((await page.locator('[data-act="del-archive"]').count()) === 1 && (await rowsCount()) === 1 && (await page.textContent('#heroDay')).includes('Noch kein Start'), 'v4: Grow archiviert, Protokoll leer');
+  ok((await page.textContent('#archiveList')).includes('25 g trocken'), 'v4: Archiv zeigt Ertrag');
+  ok(await page.locator('#restorePrev').isVisible(), 'v4: Rückgängig nach „Grow abschließen“ möglich');
+  await page.click('#restorePrev'); await page.waitForTimeout(400);
+  ok((await rowsCount()) === 2 && (await page.locator('[data-act="del-archive"]').count()) === 0 && (await page.locator('#logBody img.thumb').count()) === 1, 'v4: Wiederherstellung bringt Einträge und Foto zurück');
+  /* Mobile Navigation */
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.waitForTimeout(300);
+  ok((await page.locator('.bottomnav').isVisible()) && (await page.locator('#fab').isVisible()) && !(await page.locator('nav.tabs').isVisible()), 'v4: Mobil zeigt Bottom-Navigation und Plus-Button');
+  await page.click('#moreBtn');
+  ok(await page.evaluate(() => document.getElementById('moreSheet').open), 'v4: „Mehr“-Sheet öffnet');
+  await page.click('#moreSheet a[href="#harvest"]');
+  ok(!(await page.evaluate(() => document.getElementById('moreSheet').open)), 'v4: Sheet schließt nach Auswahl');
+  ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)), 'v4: Mobil ohne horizontalen Überlauf (mit Daten)');
+  await page.setViewportSize({ width: 1200, height: 900 });
 
   /* ---------- Mobil & Direktstart ohne Server ---------- */
   await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');

@@ -2,9 +2,9 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f5f7f5">
+<meta name="theme-color" content="#eef4ef">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -18,129 +18,274 @@
 })();
 </script>
 <style>
-:root{color-scheme:light dark;--bg:#f5f7f5;--surface:#fff;--surface2:#f0f4f0;--text:#202720;--muted:#5f6b60;--border:#d7e0d7;--green:#2e7d32;--green-dark:#1b5e20;--green-light:#e8f5e9;--blue:#1565c0;--blue-light:#e3f2fd;--orange:#f57c00;--orange-dark:#9a4400;--orange-light:#fff3e0;--red:#c62828;--red-light:#ffebee;--on-accent:#fff;--radius:14px;--shadow:0 8px 24px rgb(25 45 27/10%)}
-:root[data-theme=dark]{color-scheme:dark;--bg:#101611;--surface:#19201a;--surface2:#222b23;--text:#e7eee7;--muted:#b0beb1;--border:#3c4b3e;--green:#67c56d;--green-dark:#a6e6aa;--green-light:#214c29;--blue:#72b5ff;--blue-light:#183d62;--orange:#ffb74d;--orange-dark:#ffd092;--orange-light:#4b3217;--red:#ff8a80;--red-light:#4b1d1d;--on-accent:#0b1a0c;--shadow:0 8px 26px rgb(0 0 0/35%)}
-@media(prefers-color-scheme:dark){:root:not([data-theme]){color-scheme:dark;--bg:#101611;--surface:#19201a;--surface2:#222b23;--text:#e7eee7;--muted:#b0beb1;--border:#3c4b3e;--green:#67c56d;--green-dark:#a6e6aa;--green-light:#214c29;--blue:#72b5ff;--blue-light:#183d62;--orange:#ffb74d;--orange-dark:#ffd092;--orange-light:#4b3217;--red:#ff8a80;--red-light:#4b1d1d;--on-accent:#0b1a0c;--shadow:0 8px 26px rgb(0 0 0/35%)}}
+:root{color-scheme:light dark;--bg:#eef4ef;--surface:#fff;--glass:rgb(255 255 255/74%);--surface2:#f1f6f2;--text:#13201a;--muted:#546457;--border:#d4e1d7;--green:#1a8a3a;--green-dark:#115a28;--green-light:#e2f4e6;--blue:#0b6cb5;--blue-light:#e1f0fb;--cyan:#0a8aa6;--violet:#6a4bd4;--orange:#d97300;--orange-dark:#7d4100;--orange-light:#fff0dc;--red:#c62828;--red-light:#ffe9e9;--grad:linear-gradient(135deg,#17803a,#0a7c93);--on-accent:#fff;--glow:rgb(23 128 58/22%);--radius:18px;--shadow:0 10px 30px rgb(20 50 30/10%);--aurora1:rgb(34 197 94/18%);--aurora2:rgb(6 182 212/16%);--aurora3:rgb(139 92 246/10%)}
+:root[data-theme=dark]{color-scheme:dark;--bg:#09100c;--surface:#121b16;--glass:rgb(20 32 25/72%);--surface2:#1a261f;--text:#e8f1ea;--muted:#9fb3a4;--border:#27392e;--green:#5fd37a;--green-dark:#a6f0b8;--green-light:#173a22;--blue:#6cb6ff;--blue-light:#12324f;--cyan:#5ad6ee;--violet:#aa9bff;--orange:#ffb74d;--orange-dark:#ffd092;--orange-light:#44301a;--red:#ff8a80;--red-light:#4a1f1f;--grad:linear-gradient(135deg,#5fd37a,#46d0e8);--on-accent:#04210f;--glow:rgb(95 211 122/25%);--shadow:0 12px 34px rgb(0 0 0/40%);--aurora1:rgb(34 197 94/14%);--aurora2:rgb(6 182 212/12%);--aurora3:rgb(139 92 246/12%)}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){color-scheme:dark;--bg:#09100c;--surface:#121b16;--glass:rgb(20 32 25/72%);--surface2:#1a261f;--text:#e8f1ea;--muted:#9fb3a4;--border:#27392e;--green:#5fd37a;--green-dark:#a6f0b8;--green-light:#173a22;--blue:#6cb6ff;--blue-light:#12324f;--cyan:#5ad6ee;--violet:#aa9bff;--orange:#ffb74d;--orange-dark:#ffd092;--orange-light:#44301a;--red:#ff8a80;--red-light:#4a1f1f;--grad:linear-gradient(135deg,#5fd37a,#46d0e8);--on-accent:#04210f;--glow:rgb(95 211 122/25%);--shadow:0 12px 34px rgb(0 0 0/40%);--aurora1:rgb(34 197 94/14%);--aurora2:rgb(6 182 212/12%);--aurora3:rgb(139 92 246/12%)}}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:110px}
-body{margin:0;min-height:100vh;color:var(--text);background:var(--bg);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+html{scroll-behavior:smooth;scroll-padding-top:120px;-webkit-text-size-adjust:100%}
+body{margin:0;min-height:100vh;color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-variant-numeric:tabular-nums;background:radial-gradient(900px 500px at 8% -5%,var(--aurora1),transparent 60%),radial-gradient(800px 500px at 100% 0,var(--aurora2),transparent 60%),radial-gradient(700px 600px at 50% 110%,var(--aurora3),transparent 60%),var(--bg);background-attachment:fixed}
 button,input,select,textarea{font:inherit}
-:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
-.topbar{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--surface) 88%,transparent);border-bottom:1px solid var(--border);backdrop-filter:blur(14px)}
-.topbar-in{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;max-width:1200px;margin:auto;padding:10px 16px}
-.brand{margin:0;font-size:18px;font-weight:900;letter-spacing:-.02em;color:var(--green)}
-.actions{display:flex;flex-wrap:wrap;gap:6px}
-.btn{display:inline-block;padding:7px 13px;color:var(--text);font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:999px}
-.btn:hover{border-color:var(--green)}
-.btn.primary{color:var(--on-accent);background:var(--green);border-color:var(--green)}
+:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+a{color:var(--blue)}
+.topbar{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 70%,transparent);border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4)}
+.topbar-in{display:flex;gap:10px 14px;align-items:center;justify-content:space-between;max-width:1240px;margin:auto;padding:10px 16px}
+.brand{display:flex;gap:10px;align-items:center;margin:0;font-size:18px;font-weight:900;letter-spacing:-.02em}
+.brand .logo{display:grid;place-items:center;width:34px;height:34px;font-size:18px;color:var(--on-accent);background:var(--grad);border-radius:11px;box-shadow:0 4px 14px var(--glow)}
+.actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.btn{display:inline-flex;gap:6px;align-items:center;justify-content:center;padding:8px 14px;color:var(--text);font-size:13px;font-weight:700;line-height:1.2;text-decoration:none;cursor:pointer;background:var(--glass);border:1px solid var(--border);border-radius:999px;transition:transform .15s,border-color .15s,box-shadow .15s}
+.btn:hover{border-color:var(--green);box-shadow:0 4px 14px var(--glow)}
+.btn:active{transform:scale(.97)}
+.btn.primary{color:var(--on-accent);background:var(--grad);border-color:transparent;box-shadow:0 4px 16px var(--glow)}
 .btn.danger{color:#fff;background:var(--red);border-color:var(--red)}
 :root[data-theme=dark] .btn.danger{color:#2b0000}
-.btn.small{padding:4px 9px;font-size:12px}
-nav.tabs{display:flex;gap:4px;max-width:1200px;margin:auto;padding:0 16px 8px;overflow-x:auto}
-nav.tabs a{flex:none;padding:5px 11px;color:var(--muted);font-size:13px;font-weight:700;text-decoration:none;border-radius:999px}
+.btn.small{padding:5px 10px;font-size:12px}
+.btn.block{width:100%;justify-content:flex-start;padding:12px 16px;border-radius:14px}
+nav.tabs{display:flex;gap:4px;max-width:1240px;margin:auto;padding:0 16px 8px;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs a{flex:none;padding:6px 12px;color:var(--muted);font-size:13px;font-weight:700;text-decoration:none;border-radius:999px;transition:.15s}
 nav.tabs a:hover{color:var(--text);background:var(--surface2)}
-main{max-width:1200px;margin:auto;padding:16px}
-section{padding:18px;margin:0 0 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
-h2{margin:0 0 14px;padding-bottom:8px;color:var(--blue);font-size:20px;border-bottom:2px solid var(--border)}
+nav.tabs a.active{color:var(--on-accent);background:var(--grad)}
+main{max-width:1240px;margin:auto;padding:16px 16px 100px}
+section{position:relative;padding:22px;margin:0 0 18px;background:var(--glass);border:1px solid color-mix(in srgb,var(--border) 80%,transparent);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+section.plain{padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+.js-reveal section{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+.js-reveal section.in{opacity:1;transform:none}
+h2{display:flex;gap:10px;align-items:center;margin:0 0 16px;font-size:21px;letter-spacing:-.02em}
+h2::before{content:"";width:5px;height:22px;background:var(--grad);border-radius:4px}
 h3{margin:0 0 8px;color:var(--green);font-size:15px}
-.grid{display:grid;gap:12px}
+.grid{display:grid;gap:14px}
 .cards{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
 .charts{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-.card{padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:12px}
-.card h3{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
-.value{font-size:26px;font-weight:900;color:var(--green-dark);line-height:1.2}
+.card{position:relative;padding:15px;background:color-mix(in srgb,var(--surface) 70%,transparent);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.card h3{color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em}
+.card[data-state]::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:var(--border)}
+.card[data-state=ok]::before{background:var(--grad)}
+.card[data-state=warn]::before{background:var(--orange)}
+.card[data-state=bad]::before{background:var(--red)}
+.value{font-size:28px;font-weight:900;letter-spacing:-.02em;color:var(--text);line-height:1.15}
 .sub{margin:3px 0 0;color:var(--muted);font-size:12px}
-.panel{padding:14px;margin:12px 0;background:var(--surface2);border:1px solid var(--border);border-radius:12px}
+.panel{padding:16px;margin:14px 0;background:color-mix(in srgb,var(--surface) 55%,transparent);border:1px solid var(--border);border-radius:16px}
 .form{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 label{display:block;margin-bottom:3px;color:var(--muted);font-size:12px;font-weight:700}
-input,select,textarea{width:100%;padding:8px 10px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px}
+input,select,textarea{width:100%;padding:9px 11px;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:10px;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan);box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 25%,transparent);outline:none}
 textarea{min-height:64px;resize:vertical}
 input[type=checkbox]{width:18px;height:18px;accent-color:var(--green)}
 input:disabled{opacity:.5;cursor:not-allowed}
-.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.table-wrap{width:100%;overflow:auto;border:1px solid var(--border);border-radius:10px}
-table{width:100%;min-width:820px;border-collapse:collapse;font-size:13px}
-th,td{padding:7px 9px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
-th{position:sticky;top:0;color:var(--text);background:var(--green-light);white-space:nowrap}
-tbody tr:nth-child(even){background:var(--surface2)}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.table-wrap{width:100%;overflow:auto;border:1px solid var(--border);border-radius:14px}
+table{width:100%;min-width:860px;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}
+th{position:sticky;top:0;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;background:color-mix(in srgb,var(--surface2) 90%,transparent);white-space:nowrap}
+tbody tr:hover{background:color-mix(in srgb,var(--green) 7%,transparent)}
 td.num{white-space:nowrap}
-.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
-.chip.ok{color:var(--on-accent);background:var(--green)}
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.chip.ok{color:var(--on-accent);background:var(--grad)}
 .chip.warn{color:#241700;background:var(--orange)}
 .chip.bad{color:#fff;background:var(--red)}
 :root[data-theme=dark] .chip.bad{color:#310000}
 .chip.mute{color:var(--muted);background:var(--surface);border:1px solid var(--border)}
-.notice{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:10px 14px;margin:8px 0;border-left:4px solid var(--blue);background:var(--blue-light);border-radius:8px}
-.notice.warn{border-color:var(--orange);background:var(--orange-light);color:var(--orange-dark)}
-.notice.ok{border-color:var(--green);background:var(--green-light)}
-.item{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:flex-start;justify-content:space-between;padding:10px 12px;margin:8px 0;background:var(--surface2);border-left:4px solid var(--blue);border-radius:8px}
+.notice{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:11px 15px;margin:8px 0;border:1px solid color-mix(in srgb,var(--blue) 35%,transparent);background:var(--blue-light);border-radius:12px}
+.notice.warn{border-color:color-mix(in srgb,var(--orange) 45%,transparent);background:var(--orange-light);color:var(--orange-dark)}
+.notice.ok{border-color:color-mix(in srgb,var(--green) 40%,transparent);background:var(--green-light)}
+.item{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:flex-start;justify-content:space-between;padding:11px 14px;margin:8px 0;background:color-mix(in srgb,var(--surface) 60%,transparent);border:1px solid var(--border);border-left:4px solid var(--cyan);border-radius:12px}
 .item .meta{color:var(--muted);font-size:12px}
 .item p{margin:2px 0 0}
-.check{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px dashed var(--border);margin:0;color:var(--text);font-size:14px;font-weight:400;cursor:pointer}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--border);margin:0;color:var(--text);font-size:14px;font-weight:400;cursor:pointer}
 .check:last-child{border:0}
 .chartbox canvas{display:block;width:100%;height:220px;touch-action:pan-y;cursor:crosshair}
-.thumb{display:block;max-width:90px;max-height:70px;border-radius:6px;cursor:zoom-in}
-.thumb.zoom{max-width:100%;max-height:none;cursor:zoom-out}
-.preview{max-height:110px;border-radius:8px;margin-top:8px}
+.thumb{display:block;width:64px;height:48px;object-fit:cover;border-radius:8px;cursor:zoom-in}
+.preview{max-height:110px;border-radius:10px;margin-top:8px}
 .hidden{display:none!important}
-#toast{position:fixed;left:50%;bottom:18px;z-index:99;max-width:92vw;padding:10px 16px;color:var(--on-accent);font-weight:700;background:var(--green);border-radius:10px;box-shadow:var(--shadow);transform:translate(-50%,30px);opacity:0;pointer-events:none;transition:.25s}
-#toast.show{opacity:1;transform:translate(-50%,0)}
-#toast.err{color:#fff;background:var(--red)}
-#tip{position:fixed;z-index:98;padding:4px 9px;color:var(--on-accent);font-size:12px;font-weight:700;white-space:nowrap;background:var(--green-dark);border-radius:6px;pointer-events:none}
-:root[data-theme=dark] #tip{color:#0b1a0c}
 small.hint{display:block;margin-top:6px;color:var(--muted);font-size:12px}
-@media(max-width:600px){main{padding:10px}section{padding:14px}.value{font-size:22px}}
-@media print{.topbar,#toast,#tip,.no-print{display:none!important}body{background:#fff;color:#000}section{box-shadow:none;break-inside:avoid}}
+.seg{display:inline-flex;padding:3px;background:var(--surface2);border:1px solid var(--border);border-radius:999px}
+.seg button{padding:5px 13px;color:var(--muted);font-size:12px;font-weight:800;cursor:pointer;background:none;border:0;border-radius:999px}
+.seg button[aria-pressed=true]{color:var(--on-accent);background:var(--grad)}
+.head{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.head h2{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.qchip{padding:4px 11px;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;background:var(--surface);border:1px dashed var(--border);border-radius:999px}
+.qchip:hover{border-color:var(--green);border-style:solid}
+.cur{float:right;color:var(--text);font-size:13px;font-weight:900;text-transform:none;letter-spacing:0}
+
+/* Hero */
+.hero{display:grid;gap:18px 26px;grid-template-columns:1fr auto;align-items:center;padding:24px;margin-bottom:14px;color:var(--text);background:linear-gradient(135deg,color-mix(in srgb,var(--green) 16%,transparent),color-mix(in srgb,var(--cyan) 12%,transparent) 60%,color-mix(in srgb,var(--violet) 10%,transparent));border:1px solid color-mix(in srgb,var(--green) 30%,var(--border));border-radius:22px}
+.eyebrow{margin:0;color:var(--green);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}
+.hero h2{display:block;margin:4px 0 2px;font-size:clamp(26px,5vw,40px);line-height:1.1;letter-spacing:-.03em}
+.hero h2::before{display:none}
+.heroDay{margin:0;font-size:clamp(17px,3vw,22px);font-weight:800;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .sub{font-size:13px}
+.steps{display:flex;gap:4px;padding:0;margin:16px 0 4px;list-style:none}
+.steps li{flex:1;min-width:0;text-align:center;color:var(--muted);font-size:11px;font-weight:700}
+.steps li::before{content:"";display:block;height:7px;margin-bottom:6px;background:var(--border);border-radius:4px}
+.steps li.done::before{background:color-mix(in srgb,var(--green) 55%,var(--border))}
+.steps li.now{color:var(--text)}
+.steps li.now::before{background:var(--grad);box-shadow:0 0 12px var(--glow)}
+.steps li span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hero-side{display:flex;gap:18px;align-items:center}
+.ring{position:relative;width:104px;height:104px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:9;stroke-linecap:round}
+.ring .tr{stroke:var(--border)}
+.ring .pg{stroke:url(#ringGrad);transition:stroke-dashoffset .8s ease}
+.ring .num{position:absolute;inset:0;display:grid;place-content:center;text-align:center;line-height:1.1}
+.ring .num b{font-size:26px;font-weight:900}
+.ring .num span{color:var(--muted);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.stat{display:grid;gap:8px}
+.stat div{padding:8px 14px;background:color-mix(in srgb,var(--surface) 65%,transparent);border:1px solid var(--border);border-radius:14px}
+.stat b{display:block;font-size:19px;line-height:1.2}
+.stat span{color:var(--muted);font-size:11px;font-weight:700}
+.gauge{position:relative;height:7px;margin:10px 0 4px;background:var(--border);border-radius:5px}
+.gauge .band{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--green) 55%,transparent);border-radius:5px}
+.gauge b{position:absolute;top:-4px;width:15px;height:15px;margin-left:-7px;background:var(--text);border:3px solid var(--surface);border-radius:50%;box-shadow:0 1px 6px rgb(0 0 0/35%)}
+.spark{display:block;width:100%;height:30px;margin-top:6px;color:var(--cyan)}
+.spark path.l{fill:none;stroke:currentColor;stroke-width:2;vector-effect:non-scaling-stroke}
+.spark path.a{fill:currentColor;opacity:.14}
+
+/* Galerie, Heatmap */
+.gallery{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+.gthumb{position:relative;padding:0;overflow:hidden;cursor:zoom-in;background:var(--surface2);border:1px solid var(--border);border-radius:14px;aspect-ratio:1}
+.gthumb img{width:100%;height:100%;object-fit:cover;transition:transform .3s}
+.gthumb:hover img{transform:scale(1.06)}
+.gthumb span{position:absolute;inset:auto 0 0;padding:14px 8px 5px;color:#fff;font-size:11px;font-weight:800;text-align:left;background:linear-gradient(transparent,rgb(0 0 0/70%))}
+.heat{min-width:0;font-size:11px;text-align:center}
+.heat th,.heat td{position:static;padding:5px 3px;text-align:center}
+.heat td{font-weight:800;border:1px solid var(--surface)}
+.heat td.lo{color:#fff;background:#2f6fc0}
+.heat td.ok{color:#04210f;background:#43c463}
+.heat td.hi{color:#fff;background:#d9711b}
+.heat td.xh{color:#fff;background:#b8322f}
+.heat td.now{outline:3px solid var(--text);outline-offset:-3px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:8px;color:var(--muted);font-size:11.5px}
+.legend i{display:inline-block;width:11px;height:11px;margin-right:4px;vertical-align:-1px;border-radius:3px}
+
+/* Dialoge */
+dialog{width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 40px);padding:0;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:0 24px 70px rgb(0 0 0/45%)}
+dialog::backdrop{background:rgb(5 12 8/55%);backdrop-filter:blur(4px)}
+dialog .dh{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px}
+dialog .dh h3{margin:0;color:var(--text);font-size:18px}
+dialog .db{display:grid;gap:8px;padding:10px 18px 18px}
+#lightbox{width:min(900px,calc(100vw - 16px));background:#0b0f0c;color:#fff}
+#lightbox img{display:block;max-width:100%;max-height:70vh;margin:auto}
+#lightbox .db{justify-items:center}
+#moreSheet{margin:auto auto 0;width:100%;max-width:560px;border-radius:22px 22px 0 0}
+.sheetgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sheetgrid a{display:grid;gap:2px;justify-items:center;padding:14px 6px;color:var(--text);font-size:12px;font-weight:800;text-align:center;text-decoration:none;background:var(--surface2);border:1px solid var(--border);border-radius:16px}
+.sheetgrid a b{font-size:22px;font-weight:400}
+
+/* Mobile Navigation */
+.bottomnav{position:fixed;inset:auto 0 0;z-index:60;display:none;padding:6px 10px calc(6px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--surface) 82%,transparent);border-top:1px solid var(--border);backdrop-filter:blur(18px) saturate(1.4);-webkit-backdrop-filter:blur(18px) saturate(1.4)}
+.bottomnav-in{display:grid;grid-template-columns:repeat(5,1fr);max-width:520px;margin:auto}
+.bottomnav a,.bottomnav button{display:grid;gap:1px;justify-items:center;padding:5px 2px;color:var(--muted);font-size:10.5px;font-weight:800;text-decoration:none;cursor:pointer;background:none;border:0;border-radius:12px}
+.bottomnav b{font-size:20px;font-weight:400;line-height:1.2}
+.bottomnav .on{color:var(--green)}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:61;display:none;width:56px;height:56px;place-items:center;color:var(--on-accent);font-size:30px;line-height:1;text-decoration:none;background:var(--grad);border-radius:50%;box-shadow:0 8px 24px var(--glow),0 2px 6px rgb(0 0 0/25%)}
+#toast{position:fixed;left:50%;bottom:22px;z-index:200;max-width:92vw;padding:11px 18px;color:var(--on-accent);font-weight:700;background:var(--green);background-image:var(--grad);border-radius:14px;box-shadow:var(--shadow);transform:translate(-50%,30px);opacity:0;pointer-events:none;transition:.25s}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.err{color:#fff;background:var(--red);background-image:none}
+#tip{position:fixed;z-index:98;padding:5px 10px;color:var(--bg);font-size:12px;font-weight:800;white-space:nowrap;background:var(--text);border-radius:8px;pointer-events:none}
+@media(max-width:820px){
+  .hero{grid-template-columns:1fr}
+  .hero-side{justify-content:space-between}
+}
+@media(max-width:700px){
+  nav.tabs{display:none}
+  .bottomnav{display:block}.fab{display:grid}
+  .topbar-in{padding:8px 12px;flex-wrap:nowrap}
+  .brand{font-size:16px;white-space:nowrap}
+  .actions{flex-wrap:nowrap}
+  .actions .btn{padding:8px 11px}
+  .actions .btn .lbl{display:none}
+  main{padding:10px 10px 140px}
+  section{padding:16px}
+  #toast{bottom:calc(86px + env(safe-area-inset-bottom))}
+  .value{font-size:23px}
+  .steps li{font-size:9.5px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}.js-reveal section{opacity:1;transform:none}}
+@media print{
+  .topbar,.bottomnav,.fab,#toast,#tip,.no-print,dialog,#calc,#recipes,#timeline,#reminders,#diagnose,#checks{display:none!important}
+  body{background:#fff;color:#000}
+  section,.hero,.card,.panel{box-shadow:none;background:#fff;backdrop-filter:none;break-inside:avoid;border-color:#bbb}
+  .js-reveal section{opacity:1;transform:none}
+  .gradtext,.heroDay{color:#000;-webkit-text-fill-color:#000}
+  table{min-width:0}
+}
 </style>
 </head>
 <body>
 <header class="topbar no-print">
   <div class="topbar-in">
-    <h1 class="brand">🌱 AutoPot Grow-App</h1>
+    <h1 class="brand"><span class="logo" aria-hidden="true">🌱</span><span>AutoPot Grow</span></h1>
     <div class="actions">
-      <a class="btn" href="anleitung.html">📖 Anleitung</a>
-      <button class="btn primary" id="themeToggle" type="button">🌗 System</button>
-      <button class="btn" id="exportCsv" type="button">CSV export</button>
-      <button class="btn" id="backupJson" type="button">Backup</button>
-      <label class="btn" for="importFile" style="margin:0;cursor:pointer">Import<input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" class="hidden"></label>
+      <button class="btn primary hidden" id="installBtn" type="button">⬇ <span class="lbl">Installieren</span></button>
+      <a class="btn" href="anleitung.html" aria-label="Anleitung">📖 <span class="lbl">Anleitung</span></a>
+      <button class="btn" id="themeToggle" type="button">🌗 System</button>
+      <button class="btn" id="dataBtn" type="button" aria-haspopup="dialog">💾 <span class="lbl">Daten</span></button>
     </div>
   </div>
   <nav class="tabs" aria-label="Bereiche">
-    <a href="#dashboard">Dashboard</a><a href="#log">Messprotokoll</a><a href="#charts">Diagramme</a>
-    <a href="#calc">Rechner</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
+    <a href="#dashboard">Übersicht</a><a href="#log">Protokoll</a><a href="#charts">Diagramme</a><a href="#gallery">Galerie</a>
+    <a href="#calc">Rechner</a><a href="#harvest">Ernte</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
     <a href="#reminders">Erinnerungen</a><a href="#diagnose">Diagnose</a><a href="#checks">Checklisten</a>
   </nav>
 </header>
 
 <main>
-<section id="dashboard">
-  <h2>Dashboard</h2>
+<section id="dashboard" class="plain">
+  <div class="hero">
+    <div>
+      <p class="eyebrow" id="heroEyebrow">Dein Grow</p>
+      <h2 id="heroName">AutoPot Grow</h2>
+      <p class="heroDay" id="heroDay">Startdatum setzen</p>
+      <p class="sub" id="heroSub"></p>
+      <ol class="steps" id="phaseSteps" aria-label="Phasen"></ol>
+      <div class="row no-print">
+        <a class="btn primary" href="#log" id="heroAdd">＋ Messung eintragen</a>
+        <button class="btn" id="tankChange" type="button">💧 Tank gewechselt</button>
+      </div>
+    </div>
+    <div class="hero-side">
+      <div class="ring" role="img" aria-label="Grow-Score" id="scoreRing">
+        <svg viewBox="0 0 80 80"><defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#06b6d4"/></linearGradient></defs><circle class="tr" cx="40" cy="40" r="33"/><circle class="pg" id="ringPg" cx="40" cy="40" r="33" stroke-dasharray="207.3" stroke-dashoffset="207.3"/></svg>
+        <div class="num"><b id="scoreVal">–</b><span>Score</span></div>
+      </div>
+      <div class="stat">
+        <div><b id="streakVal">–</b><span>Messserie</span></div>
+        <div><b id="entryCount">0</b><span>Einträge</span></div>
+      </div>
+    </div>
+  </div>
+
   <div id="findings"></div>
   <div class="grid cards">
-    <div class="card"><h3>Tank-pH</h3><div class="value" id="kPh">–</div><p class="sub" id="kPhSub"></p></div>
-    <div class="card"><h3>Tank-EC</h3><div class="value" id="kEc">–</div><p class="sub" id="kEcSub"></p></div>
-    <div class="card"><h3>VPD</h3><div class="value" id="kVpd">–</div><p class="sub" id="kVpdSub"></p></div>
-    <div class="card"><h3>Tank-Restlaufzeit</h3><div class="value" id="kTank">–</div><p class="sub" id="kTankSub"></p></div>
+    <div class="card" id="cardPh"><h3>Tank-pH</h3><div class="value" id="kPh">–</div><p class="sub" id="kPhSub"></p><div id="gPh"></div><div id="spPh"></div></div>
+    <div class="card" id="cardEc"><h3>Tank-EC</h3><div class="value" id="kEc">–</div><p class="sub" id="kEcSub"></p><div id="gEc"></div><div id="spEc"></div></div>
+    <div class="card" id="cardVpd"><h3>VPD</h3><div class="value" id="kVpd">–</div><p class="sub" id="kVpdSub"></p><div id="gVpd"></div><div id="spVpd"></div></div>
+    <div class="card" id="cardTank"><h3>Tank-Restlaufzeit</h3><div class="value" id="kTank">–</div><p class="sub" id="kTankSub"></p><div id="gTank"></div></div>
     <div class="card"><h3>Letzter Eintrag</h3><div class="value" id="kLast">–</div><p class="sub" id="kLastSub"></p></div>
     <div class="card"><h3>Montage / Woche</h3><div class="value" id="kChecks">–</div><p class="sub">erledigte Checklistenpunkte</p></div>
   </div>
-  <div class="panel">
+  <div class="panel" style="background:var(--glass)">
     <h3>Aktueller Grow</h3>
     <div class="form">
       <div><label for="sName">Grow-Name</label><input id="sName" type="text" maxlength="60"></div>
+      <div><label for="sStart">Startdatum</label><input id="sStart" type="date"></div>
       <div><label for="sPhase">Phase</label><select id="sPhase"></select></div>
       <div><label for="sTankSize">Tankvolumen (L)</label><input id="sTankSize" type="number" min="1" step="0.5"></div>
       <div><label for="sTankRest">Aktuell im Tank (L)</label><input id="sTankRest" type="number" min="0" step="0.5"></div>
       <div><label for="sDailyUse">Verbrauch pro Tag (L)</label><input id="sDailyUse" type="number" min="0" step="0.1"></div>
+      <div><label for="sInterval">Tankwechsel alle (Tage)</label><input id="sInterval" type="number" min="1" step="1"></div>
     </div>
     <p class="sub" id="phaseHint"></p>
+    <p class="sub" id="tankInfo"></p>
     <div class="row"><button id="restorePrev" class="btn small hidden" type="button">↶ Letzten Import rückgängig machen</button></div>
   </div>
 </section>
 
 <section id="log">
   <h2>Messprotokoll</h2>
-  <div class="panel">
+  <div class="panel" style="background:var(--glass)">
     <h3 id="formTitle">Neuer Eintrag</h3>
     <div class="form">
       <div><label for="fDate">Datum</label><input id="fDate" type="date"></div>
@@ -152,9 +297,11 @@ small.hint{display:block;margin-top:6px;color:var(--muted);font-size:12px}
       <div><label for="fRh">Luftfeuchte %</label><input id="fRh" type="number" step="1" min="0" max="100"></div>
       <div><label for="fPpfd">PPFD</label><input id="fPpfd" type="number" step="10" min="0"></div>
       <div><label for="fUse">Verbrauch L/Tag</label><input id="fUse" type="number" step="0.1" min="0"></div>
+      <div><label for="fHeight">Pflanzenhöhe cm</label><input id="fHeight" type="number" step="0.5" min="0"></div>
     </div>
     <div class="form" style="margin-top:10px">
-      <div><label for="fTags">Tags (Komma-getrennt)</label><input id="fTags" type="text" maxlength="120" placeholder="pH, Wurzeln, Licht"></div>
+      <div><label for="fTags">Tags (Komma-getrennt)</label><input id="fTags" type="text" maxlength="120" placeholder="pH, Wurzeln, Licht">
+        <div class="chips" id="tagChips"></div></div>
       <div><label for="fPhoto">Foto (wird verkleinert gespeichert)</label><input id="fPhoto" type="file" accept="image/*"></div>
     </div>
     <img id="photoPreview" class="preview hidden" alt="Foto-Vorschau">
@@ -166,29 +313,53 @@ small.hint{display:block;margin-top:6px;color:var(--muted);font-size:12px}
       <button id="clearForm" class="btn" type="button">Formular leeren</button>
     </div>
   </div>
+  <div class="head">
+    <div class="form" style="grid-template-columns:minmax(140px,2fr) minmax(130px,1fr) auto;align-items:end;flex:1">
+      <div><label for="lSearch">Suche</label><input id="lSearch" type="search" placeholder="Notiz, Tag, Datum …"></div>
+      <div><label for="lPhase">Phase</label><select id="lPhase"></select></div>
+      <label class="check" style="padding:0 0 9px;border:0"><input id="lPhoto" type="checkbox"><span>nur mit Foto</span></label>
+    </div>
+    <span class="sub" id="logCount"></span>
+  </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Datum</th><th>Phase</th><th>EC</th><th>pH</th><th>Wasser °C</th><th>Luft °C</th><th>rF %</th><th>VPD</th><th>PPFD</th><th>L/Tag</th><th>Tags / Notiz</th><th>Foto</th><th></th></tr></thead>
+      <thead><tr><th>Datum</th><th>Phase</th><th>EC</th><th>pH</th><th>Wasser °C</th><th>Luft °C</th><th>rF %</th><th>VPD</th><th>PPFD</th><th>L/Tag</th><th>Höhe</th><th>Tags / Notiz</th><th>Foto</th><th></th></tr></thead>
       <tbody id="logBody"></tbody>
     </table>
   </div>
+  <div class="row"><button id="logMore" class="btn small hidden" type="button">Mehr anzeigen</button></div>
 </section>
 
 <section id="charts">
-  <h2>Diagramme</h2>
+  <div class="head">
+    <h2>Diagramme</h2>
+    <div class="seg" role="group" aria-label="Zeitraum" id="rangeSeg">
+      <button type="button" data-range="7" aria-pressed="false">7 T</button>
+      <button type="button" data-range="14" aria-pressed="false">14 T</button>
+      <button type="button" data-range="30" aria-pressed="false">30 T</button>
+      <button type="button" data-range="0" aria-pressed="true">Alles</button>
+    </div>
+  </div>
   <p class="sub" style="margin-bottom:10px">Grün hinterlegt: Zielbereich der aktuell gewählten Phase bzw. fester Zielbereich. Mit der Maus darüberfahren oder antippen für Datum und Wert.</p>
   <div class="grid charts">
-    <div class="card"><h3>EC</h3><div class="chartbox"><canvas id="cEc" role="img" aria-label="Verlauf Tank-EC"></canvas></div></div>
-    <div class="card"><h3>pH</h3><div class="chartbox"><canvas id="cPh" role="img" aria-label="Verlauf Tank-pH"></canvas></div></div>
-    <div class="card"><h3>VPD (kPa)</h3><div class="chartbox"><canvas id="cVpd" role="img" aria-label="Verlauf VPD"></canvas></div></div>
-    <div class="card"><h3>Lufttemperatur (°C)</h3><div class="chartbox"><canvas id="cAir" role="img" aria-label="Verlauf Lufttemperatur"></canvas></div></div>
-    <div class="card"><h3>Luftfeuchte (%)</h3><div class="chartbox"><canvas id="cRh" role="img" aria-label="Verlauf Luftfeuchte"></canvas></div></div>
-    <div class="card"><h3>Wassertemperatur (°C)</h3><div class="chartbox"><canvas id="cWater" role="img" aria-label="Verlauf Wassertemperatur"></canvas></div></div>
-    <div class="card"><h3>PPFD</h3><div class="chartbox"><canvas id="cPpfd" role="img" aria-label="Verlauf PPFD"></canvas></div></div>
-    <div class="card"><h3>Verbrauch (L/Tag)</h3><div class="chartbox"><canvas id="cUse" role="img" aria-label="Verlauf Verbrauch"></canvas></div></div>
+    <div class="card"><h3>EC <span class="cur"></span></h3><div class="chartbox"><canvas id="cEc" role="img" aria-label="Verlauf Tank-EC"></canvas></div></div>
+    <div class="card"><h3>pH <span class="cur"></span></h3><div class="chartbox"><canvas id="cPh" role="img" aria-label="Verlauf Tank-pH"></canvas></div></div>
+    <div class="card"><h3>VPD (kPa) <span class="cur"></span></h3><div class="chartbox"><canvas id="cVpd" role="img" aria-label="Verlauf VPD"></canvas></div></div>
+    <div class="card"><h3>Lufttemperatur (°C) <span class="cur"></span></h3><div class="chartbox"><canvas id="cAir" role="img" aria-label="Verlauf Lufttemperatur"></canvas></div></div>
+    <div class="card"><h3>Luftfeuchte (%) <span class="cur"></span></h3><div class="chartbox"><canvas id="cRh" role="img" aria-label="Verlauf Luftfeuchte"></canvas></div></div>
+    <div class="card"><h3>Wassertemperatur (°C) <span class="cur"></span></h3><div class="chartbox"><canvas id="cWater" role="img" aria-label="Verlauf Wassertemperatur"></canvas></div></div>
+    <div class="card"><h3>PPFD <span class="cur"></span></h3><div class="chartbox"><canvas id="cPpfd" role="img" aria-label="Verlauf PPFD"></canvas></div></div>
+    <div class="card"><h3>Verbrauch (L/Tag) <span class="cur"></span></h3><div class="chartbox"><canvas id="cUse" role="img" aria-label="Verlauf Verbrauch"></canvas></div></div>
+    <div class="card"><h3>Pflanzenhöhe (cm) <span class="cur"></span></h3><div class="chartbox"><canvas id="cHeight" role="img" aria-label="Verlauf Pflanzenhöhe"></canvas></div></div>
   </div>
   <h3 style="margin-top:18px">Durchschnitt je Phase</h3>
   <div id="averages" class="grid cards"></div>
+</section>
+
+<section id="gallery">
+  <h2>Foto-Galerie</h2>
+  <div id="galleryGrid" class="gallery"></div>
+  <p class="sub" id="galleryEmpty">Noch keine Fotos. Beim Eintragen ein Foto anhängen, dann entsteht hier dein Wachstums-Zeitraffer.</p>
 </section>
 
 <section id="calc">
@@ -223,7 +394,43 @@ small.hint{display:block;margin-top:6px;color:var(--muted);font-size:12px}
       <p id="tOut" style="margin:0"></p>
       <small class="hint">Werte stammen aus „Aktueller Grow“ im Dashboard.</small>
     </div>
+    <div class="card"><h3>EC ⇄ PPM</h3>
+      <label for="ppScale">Skala</label><select id="ppScale"><option value="500">500 (NaCl, 0,5)</option><option value="640">640 (Kcl, 0,64)</option><option value="700">700 (442, 0,7)</option></select>
+      <label for="ppEc">EC (mS/cm)</label><input id="ppEc" type="number" step="0.01" value="1.6">
+      <label for="ppPpm">PPM</label><input id="ppPpm" type="number" step="10">
+      <small class="hint">Die Anleitung rechnet in EC. PPM hängt von der Skala deines Messgeräts ab.</small>
+    </div>
+    <div class="card"><h3>DLI (Lichtmenge pro Tag)</h3>
+      <label for="dPpfd">PPFD (µmol/m²/s)</label><input id="dPpfd" type="number" step="10" value="600">
+      <label for="dHours">Lichtstunden pro Tag</label><input id="dHours" type="number" step="0.5" value="18">
+      <p id="dOut" style="margin:10px 0 0"></p>
+    </div>
   </div>
+  <div class="card" style="margin-top:14px">
+    <div class="head" style="margin-bottom:6px"><h3 style="margin:0">VPD-Heatmap</h3>
+      <div style="min-width:170px"><label for="hLeaf" style="margin:0">Blatt-Offset zur Luft (°C)</label><input id="hLeaf" type="number" step="0.5" value="0"></div></div>
+    <div class="table-wrap"><table class="heat" id="vpdMap" style="min-width:0"></table></div>
+    <div class="legend"><span><i style="background:#2f6fc0"></i>zu niedrig</span><span><i style="background:#43c463"></i>im Ziel (Phase)</span><span><i style="background:#d9711b"></i>zu hoch</span><span><i style="background:#b8322f"></i>deutlich zu hoch</span><span id="heatNote"></span></div>
+  </div>
+</section>
+
+<section id="harvest">
+  <h2>Ernte &amp; Auswertung</h2>
+  <div class="form">
+    <div><label for="hDate">Erntedatum</label><input id="hDate" type="date"></div>
+    <div><label for="hWet">Nassgewicht (g)</label><input id="hWet" type="number" step="0.1" min="0"></div>
+    <div><label for="hDry">Trockengewicht (g)</label><input id="hDry" type="number" step="0.1" min="0"></div>
+    <div><label for="hWatt">Lampenleistung (W)</label><input id="hWatt" type="number" step="1" min="0"></div>
+    <div style="grid-column:span 2"><label for="hNote">Notiz (Sorte, Eindruck, Geruch …)</label><input id="hNote" type="text" maxlength="300"></div>
+  </div>
+  <div id="hOut" class="grid cards" style="margin-top:12px"></div>
+  <div class="row no-print">
+    <button id="newGrow" class="btn" type="button">🏁 Grow abschließen &amp; neu starten</button>
+    <button id="printBtn" class="btn" type="button">🖨 Bericht drucken</button>
+  </div>
+  <small class="hint">„Abschließen“ lädt zuerst ein Backup herunter, legt den Grow im Archiv ab und beginnt mit leerem Protokoll (Rezepte und Erinnerungen bleiben). Über „Letzten Import rückgängig machen“ holst du den Stand zurück.</small>
+  <h3 style="margin-top:16px">Archiv</h3>
+  <div id="archiveList"></div>
 </section>
 
 <section id="recipes">
@@ -287,6 +494,39 @@ small.hint{display:block;margin-top:6px;color:var(--muted);font-size:12px}
   </div>
 </section>
 </main>
+
+<nav class="bottomnav no-print" aria-label="Hauptnavigation"><div class="bottomnav-in">
+  <a href="#dashboard" data-nav="dashboard"><b>🏠</b>Übersicht</a>
+  <a href="#log" data-nav="log"><b>📝</b>Protokoll</a>
+  <a href="#charts" data-nav="charts"><b>📈</b>Diagramme</a>
+  <a href="#calc" data-nav="calc"><b>🧮</b>Rechner</a>
+  <button type="button" id="moreBtn" aria-haspopup="dialog"><b>☰</b>Mehr</button>
+</div></nav>
+<a class="fab no-print" href="#log" id="fab" aria-label="Neue Messung eintragen">＋</a>
+
+<dialog id="dataDlg" aria-labelledby="dataTitle">
+  <div class="dh"><h3 id="dataTitle">Daten &amp; Sicherung</h3><button class="btn small" type="button" data-close="dataDlg" aria-label="Schließen">✕</button></div>
+  <div class="db">
+    <p class="sub" id="backupState" style="margin:0 0 4px"></p>
+    <button class="btn block" id="backupJson" type="button">💾 Backup (JSON, mit Fotos)</button>
+    <button class="btn block" id="exportCsv" type="button">📊 CSV exportieren</button>
+    <label class="btn block" for="importFile" style="margin:0">📥 Import (JSON oder CSV)<input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" class="hidden"></label>
+    <button class="btn block" id="printBtn2" type="button">🖨 Bericht drucken</button>
+    <small class="hint">Alles liegt nur in diesem Browser. Regelmäßig ein Backup speichern.</small>
+  </div>
+</dialog>
+<dialog id="moreSheet" aria-labelledby="moreTitle">
+  <div class="dh"><h3 id="moreTitle">Alle Bereiche</h3><button class="btn small" type="button" data-close="moreSheet" aria-label="Schließen">✕</button></div>
+  <div class="db"><div class="sheetgrid">
+    <a href="#gallery"><b>🖼</b>Galerie</a><a href="#harvest"><b>🌾</b>Ernte</a><a href="#recipes"><b>🧪</b>Rezepte</a>
+    <a href="#timeline"><b>🗓</b>Timeline</a><a href="#reminders"><b>⏰</b>Erinnerungen</a><a href="#diagnose"><b>🩺</b>Diagnose</a>
+    <a href="#checks"><b>✅</b>Checklisten</a><a href="anleitung.html"><b>📖</b>Anleitung</a><a href="#" data-open="dataDlg"><b>💾</b>Daten</a>
+  </div></div>
+</dialog>
+<dialog id="lightbox" aria-label="Foto">
+  <div class="dh"><h3 id="lbCap" style="color:#fff">Foto</h3><button class="btn small" type="button" data-close="lightbox" aria-label="Schließen">✕</button></div>
+  <div class="db"><img id="lbImg" alt="Foto"><div class="row"><button class="btn small" id="lbPrev" type="button">‹ Zurück</button><button class="btn small" id="lbNext" type="button">Weiter ›</button></div><p class="sub" id="lbNote" style="color:#cfd8d1"></p></div>
+</dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="tip" class="hidden" role="tooltip"></div>
 
@@ -365,16 +605,16 @@ function normPhase(p) {
   return String(p).trim().slice(0, 60);
 }
 
-/* ---------- Datenmodell (Schema v3) ---------- */
+/* ---------- Datenmodell (Schema v4) ---------- */
 const blank = () => ({
-  version: 3,
-  settings: { name: '', phase: 'Vegetation', tankSize: 40, tankRest: 30, dailyUse: 2, lastBackup: null, entriesSinceBackup: 0 },
+  version: 4,
+  settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
   entries: [], recipes: [], events: [], reminders: [],
-  checks: { setup: {}, week: {} }
+  checks: { setup: {}, week: {} },
+  harvest: { date: '', wet: null, dry: null, watt: null, note: '' },
+  archive: []
 });
 
-/* Fotos liegen nicht im Zustand, sondern in IndexedDB (photoCache spiegelt sie im Speicher).
-   Beim Import/Export tragen Einträge das Feld "photo" (Data-URL); im Zustand steht nur "hasPhoto". */
 function normEntry(e) {
   if (!e || typeof e !== 'object') return null;
   const date = String(e.date ?? '').slice(0, 10);
@@ -385,7 +625,7 @@ function normEntry(e) {
     date, phase: normPhase(e.phase),
     ec: num(e.ec), ph: num(e.ph),
     waterTemp: num(e.waterTemp ?? e.water), airTemp: num(e.airTemp ?? e.temp),
-    humidity: num(e.humidity ?? e.rh), ppfd: num(e.ppfd), use: num(e.use),
+    humidity: num(e.humidity ?? e.rh), ppfd: num(e.ppfd), use: num(e.use), height: num(e.height),
     tags: String(e.tags ?? '').slice(0, 200), note: String(e.note ?? '').slice(0, 2000),
     hasPhoto: !!(photo || e.hasPhoto)
   };
@@ -405,6 +645,9 @@ function normalize(d) {
   out.settings.dailyUse = num(s.dailyUse) ?? 2;
   out.settings.lastBackup = typeof s.lastBackup === 'string' ? s.lastBackup : null;
   out.settings.entriesSinceBackup = Math.max(0, Math.round(num(s.entriesSinceBackup) ?? 0));
+  const dstr = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) ? v.slice(0, 10) : null;
+  out.settings.startDate = dstr(s.startDate); out.settings.phaseStart = dstr(s.phaseStart); out.settings.lastTankChange = dstr(s.lastTankChange);
+  const iv = num(s.tankInterval); out.settings.tankInterval = iv != null && iv >= 1 ? Math.min(365, Math.round(iv)) : 14;
   out.entries = (Array.isArray(d.entries) ? d.entries : []).map(normEntry).filter(Boolean);
   out.recipes = (Array.isArray(d.recipes) ? d.recipes : []).filter(r => r && r.name).map(r => ({ id: String(r.id || uid()), name: String(r.name).slice(0, 60), phase: String(r.phase ?? '').slice(0, 60), text: String(r.text ?? '').slice(0, 500) }));
   out.events = (Array.isArray(d.events) ? d.events : []).filter(e => e && /^\d{4}-\d{2}-\d{2}/.test(e.date || '') && e.title).map(e => ({ id: String(e.id || uid()), date: String(e.date).slice(0, 10), title: String(e.title).slice(0, 80), note: String(e.note ?? '').slice(0, 300) }));
@@ -418,6 +661,12 @@ function normalize(d) {
   const c = d.checks && typeof d.checks === 'object' ? d.checks : {};
   out.checks.setup = boolMap(c.setup ?? d.setupState, SETUP_CHECKS.length);
   out.checks.week = boolMap(c.week ?? d.weekState, WEEK_CHECKS.length);
+  const hv = d.harvest && typeof d.harvest === 'object' ? d.harvest : {};
+  out.harvest = { date: dstr(hv.date) || '', wet: num(hv.wet), dry: num(hv.dry), watt: num(hv.watt), note: String(hv.note ?? '').slice(0, 300) };
+  out.archive = (Array.isArray(d.archive) ? d.archive : []).filter(a => a && typeof a === 'object').slice(0, 100).map(a => ({
+    id: String(a.id || uid()).slice(0, 40), name: String(a.name ?? 'Grow').slice(0, 60), start: dstr(a.start), end: dstr(a.end),
+    entries: Math.max(0, Math.round(num(a.entries) ?? 0)), days: num(a.days), wet: num(a.wet), dry: num(a.dry), watt: num(a.watt), avgEc: num(a.avgEc), avgPh: num(a.avgPh)
+  }));
   return out;
 }
 
@@ -524,6 +773,46 @@ function rangeChip(v, r) {
   return ['im Ziel', 'ok'];
 }
 const rng = (r, unit = '') => r ? `${nf(r[0])}–${nf(r[1])}${unit}` : '–';
+const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00') - Date.parse(a + 'T00:00:00')) / 864e5);
+const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const svp = t => 0.6108 * Math.exp(17.27 * t / (t + 237.3));
+const phaseProfile = e => PROFILE[e && e.phase] || PROFILE[S.settings.phase] || PROFILE.Vegetation;
+
+function tankDays() {
+  const { tankRest: r, dailyUse: u } = S.settings;
+  return (u > 0 && r >= 0) ? Math.floor(r / u) : null;
+}
+function growInfo() {
+  const es = sorted();
+  const start = S.settings.startDate || (es[0] && es[0].date) || null;
+  if (!start) return null;
+  const day = Math.max(1, dayDiff(start, todayStr()) + 1);
+  const ps = S.settings.phaseStart || start;
+  return { start, derived: !S.settings.startDate, day, week: Math.ceil(day / 7), phaseDays: Math.max(1, dayDiff(ps, todayStr()) + 1) };
+}
+/* Grow-Score: Anteil der Messwerte der letzten 14 Tage (sonst des letzten Eintrags), die im Zielbereich liegen */
+function growScore() {
+  const all = sorted();
+  const recent = all.filter(e => daysAgo(e.date) <= 14);
+  const list = recent.length ? recent : all.slice(-1);
+  let ok = 0, n = 0;
+  list.forEach(e => {
+    const p = phaseProfile(e);
+    [[e.ph, PH_RANGE], [e.ec, p.ec], [vpdOf(e), p.vpd], [e.waterTemp, WATER_RANGE], [e.airTemp, p.temp], [e.humidity, p.rh], [e.ppfd, p.ppfd]].forEach(([v, r]) => {
+      if (v == null || !r) return;
+      n++; if (v >= r[0] && v <= r[1]) ok++;
+    });
+  });
+  return n ? Math.round(ok / n * 100) : null;
+}
+function streak() {
+  const days = new Set(S.entries.map(e => e.date));
+  const d = new Date();
+  if (!days.has(isoOf(d))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (days.has(isoOf(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
 
 function findings() {
   const out = [];
@@ -545,6 +834,10 @@ function findings() {
   chk(`Lufttemperatur (Phase ${pn})`, e.airTemp, p.temp, ' °C');
   chk(`Luftfeuchte (Phase ${pn})`, e.humidity, p.rh, ' %');
   chk(`PPFD (Phase ${pn})`, e.ppfd, p.ppfd, '');
+  const td = tankDays();
+  if (td != null && td <= 2) out.push(['warn', `Der Tank reicht nur noch etwa ${td} Tag(e). Bald nachfüllen oder wechseln.`]);
+  const tc = S.settings.lastTankChange, iv = S.settings.tankInterval;
+  if (tc && iv && daysAgo(tc) >= iv) out.push(['warn', `Der letzte Tankwechsel war vor ${daysAgo(tc)} Tagen (Intervall ${iv} Tage). Wechsel fällig.`]);
   if (!out.length) out.push(['ok', 'Letzte Messwerte liegen im Zielbereich.']);
   const since = S.settings.entriesSinceBackup || 0;
   if (!S.settings.lastBackup) {
@@ -562,24 +855,67 @@ function fillSelect(sel, withEmpty) {
   sel.innerHTML = (withEmpty ? '<option value="">–</option>' : '') + PHASES.map(p => `<option>${esc(p)}</option>`).join('');
 }
 const hasPrev = () => { try { return !!localStorage.getItem(KEY + '-prev'); } catch (e) { return false; } };
+const PH_SHORT = ['Jung', 'Vegetation', 'Übergang', 'Blüte', 'Ende'];
+
+function sparkSvg(vals) {
+  vals = vals.filter(v => v != null && Number.isFinite(v)).slice(-12);
+  if (vals.length < 2) return '';
+  const lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
+  const d = vals.map((v, i) => `${i ? 'L' : 'M'}${(i / (vals.length - 1) * 100).toFixed(1)} ${(26 - (v - lo) / sp * 22).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${d} L100 30 L0 30 Z"/><path class="l" d="${d}"/></svg>`;
+}
+function gaugeHtml(v, r) {
+  if (!r) return '';
+  const span = r[1] - r[0] || 1, lo = r[0] - span * 0.8, hi = r[1] + span * 0.8;
+  const pos = v == null ? null : Math.min(100, Math.max(0, (v - lo) / (hi - lo) * 100));
+  return `<div class="gauge" aria-hidden="true"><i class="band" style="left:${(r[0] - lo) / (hi - lo) * 100}%;width:${span / (hi - lo) * 100}%"></i>${pos == null ? '' : `<b style="left:${pos}%"></b>`}</div>`;
+}
+function setState(id, cls) { const el = $(id); if (cls === 'ok' || cls === 'warn' || cls === 'bad') el.dataset.state = cls; else delete el.dataset.state; }
+
+function renderHero() {
+  const gi = growInfo();
+  $('heroName').textContent = S.settings.name || 'Mein Grow';
+  if (gi) {
+    $('heroDay').textContent = `Tag ${gi.day} · Woche ${gi.week}`;
+    $('heroSub').textContent = `${S.settings.phase}${S.settings.phaseStart ? ` seit ${gi.phaseDays} ${gi.phaseDays === 1 ? 'Tag' : 'Tagen'}` : ''} · Start ${fmtDate(gi.start)}${gi.derived ? ' (erster Eintrag)' : ''}`;
+  } else {
+    $('heroDay').textContent = 'Noch kein Start';
+    $('heroSub').textContent = 'Trage unten ein Startdatum ein, dann zählt die App Tage und Wochen.';
+  }
+  const idx = PHASES.indexOf(S.settings.phase);
+  $('phaseSteps').innerHTML = PHASES.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'now' : ''}"${i === idx ? ' aria-current="step"' : ''}><span title="${esc(p)}">${PH_SHORT[i]}</span></li>`).join('');
+  const sc = growScore();
+  $('scoreVal').textContent = sc == null ? '–' : sc;
+  $('ringPg').style.strokeDashoffset = 207.3 * (1 - (sc || 0) / 100);
+  $('scoreRing').setAttribute('aria-label', sc == null ? 'Grow-Score: noch keine Daten' : `Grow-Score ${sc} von 100`);
+  const st = streak();
+  $('streakVal').textContent = st ? `${st >= 3 ? '🔥 ' : ''}${st} ${st === 1 ? 'Tag' : 'Tage'}` : '–';
+  $('entryCount').textContent = S.entries.length;
+}
 
 function renderDashboard() {
+  renderHero();
   const es = sorted(), e = es[es.length - 1];
   const pn = e && PROFILE[e.phase] ? e.phase : S.settings.phase, p = PROFILE[pn];
+  const v = e ? vpdOf(e) : null;
   $('kPh').textContent = e ? fmtPh(e.ph) : '–';
   $('kPhSub').textContent = `Ziel ${rng(PH_RANGE)} · ${rangeChip(e?.ph, PH_RANGE)[0]}`;
   $('kEc').textContent = e ? nf(e.ec) : '–';
   $('kEcSub').textContent = `Ziel ${rng(p.ec)} · ${rangeChip(e?.ec, p.ec)[0]}`;
-  const v = e ? vpdOf(e) : null;
   $('kVpd').textContent = v == null ? '–' : nf(v) + ' kPa';
   $('kVpdSub').textContent = `Ziel ${rng(p.vpd, ' kPa')} · ${rangeChip(v, p.vpd)[0]}`;
-  const rest = S.settings.tankRest, use = S.settings.dailyUse;
-  if (use > 0 && rest >= 0) {
-    const days = Math.floor(rest / use);
-    $('kTank').textContent = days + ' Tage';
-    const d = new Date(); d.setDate(d.getDate() + days);
+  $('gPh').innerHTML = gaugeHtml(e?.ph, PH_RANGE); $('gEc').innerHTML = gaugeHtml(e?.ec, p.ec); $('gVpd').innerHTML = gaugeHtml(v, p.vpd);
+  $('spPh').innerHTML = sparkSvg(es.map(x => x.ph)); $('spEc').innerHTML = sparkSvg(es.map(x => x.ec)); $('spVpd').innerHTML = sparkSvg(es.map(vpdOf));
+  setState('cardPh', rangeChip(e?.ph, PH_RANGE)[1]); setState('cardEc', rangeChip(e?.ec, p.ec)[1]); setState('cardVpd', rangeChip(v, p.vpd)[1]);
+  const td = tankDays();
+  if (td != null) {
+    $('kTank').textContent = td + ' Tage';
+    const d = new Date(); d.setDate(d.getDate() + td);
     $('kTankSub').textContent = 'leer ca. ' + d.toLocaleDateString('de-DE');
-  } else { $('kTank').textContent = '–'; $('kTankSub').textContent = 'Verbrauch eintragen'; }
+    const pct = S.settings.tankSize > 0 ? Math.max(0, Math.min(100, S.settings.tankRest / S.settings.tankSize * 100)) : 0;
+    $('gTank').innerHTML = `<div class="gauge" aria-hidden="true"><i class="band" style="left:0;width:${pct}%${pct < 15 ? ';background:var(--orange)' : ''}"></i></div>`;
+    setState('cardTank', td <= 2 ? 'bad' : td <= 4 ? 'warn' : 'ok');
+  } else { $('kTank').textContent = '–'; $('kTankSub').textContent = 'Verbrauch eintragen'; $('gTank').innerHTML = ''; setState('cardTank', ''); }
   $('kLast').textContent = e ? fmtDate(e.date) : '–';
   $('kLastSub').textContent = e ? (daysAgo(e.date) === 0 ? 'heute' : `vor ${daysAgo(e.date)} Tagen`) : 'keine Einträge';
   const sd = SETUP_CHECKS.filter((_, i) => S.checks.setup[i]).length, wd = WEEK_CHECKS.filter((_, i) => S.checks.week[i]).length;
@@ -587,30 +923,59 @@ function renderDashboard() {
   const ACTIONS = { backup: 'Jetzt sichern' };
   $('findings').innerHTML = findings().map(([c, m, a]) => `<div class="notice ${c}"><span>${esc(m)}</span>${a ? `<button class="btn small primary" data-act="${a}" type="button">${ACTIONS[a]}</button>` : ''}</div>`).join('');
   $('phaseHint').textContent = S.settings.phase === 'Endphase' ? 'Endphase: Klima und VPD wie späte Blüte, EC schrittweise absenken (Anleitung Kap. 7 und 9). Für PPFD gibt es keine feste Vorgabe.' : '';
+  const tc = S.settings.lastTankChange;
+  $('tankInfo').textContent = tc ? `Letzter Tankwechsel: ${fmtDate(tc)} (${daysAgo(tc) === 0 ? 'heute' : `vor ${daysAgo(tc)} Tagen`}), Intervall ${S.settings.tankInterval} Tage.` : 'Noch kein Tankwechsel notiert. Mit „Tank gewechselt“ oben festhalten.';
+  $('backupState').textContent = S.settings.lastBackup ? `Letztes Backup: ${fmtDate(S.settings.lastBackup.slice(0, 10))}` : 'Noch kein Backup erstellt.';
   $('restorePrev').classList.toggle('hidden', !hasPrev());
 }
 
+const LF = { q: '', phase: '', photo: false, limit: 25 };
+function filteredEntries() {
+  const q = LF.q.trim().toLowerCase();
+  return sorted().reverse().filter(e => {
+    if (LF.phase && e.phase !== LF.phase) return false;
+    if (LF.photo && !photoCache.has(e.id)) return false;
+    if (q && !`${e.note} ${e.tags} ${fmtDate(e.date)} ${e.date} ${e.phase}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
 function renderLog() {
   const body = $('logBody');
-  const es = sorted().reverse();
-  if (!es.length) { body.innerHTML = '<tr><td colspan="13">Noch keine Einträge.</td></tr>'; return; }
+  const all = filteredEntries(), es = all.slice(0, LF.limit);
+  $('logMore').classList.toggle('hidden', all.length <= LF.limit);
+  $('logCount').textContent = S.entries.length ? `${all.length} von ${S.entries.length} Einträgen` : '';
+  if (!es.length) { body.innerHTML = `<tr><td colspan="14">${S.entries.length ? 'Keine Treffer für diesen Filter.' : 'Noch keine Einträge.'}</td></tr>`; return; }
   body.innerHTML = es.map(e => {
     const v = vpdOf(e), photo = photoCache.get(e.id);
-    return `<tr><td class="num">${esc(fmtDate(e.date))}</td><td>${esc(e.phase || '–')}</td><td class="num">${nf(e.ec)}</td><td class="num">${fmtPh(e.ph)}</td><td class="num">${nf(e.waterTemp, 1)}</td><td class="num">${nf(e.airTemp, 1)}</td><td class="num">${nf(e.humidity, 0)}</td><td class="num">${nf(v)}</td><td class="num">${nf(e.ppfd, 0)}</td><td class="num">${nf(e.use, 1)}</td><td>${e.tags ? `<em>${esc(e.tags)}</em><br>` : ''}${esc(e.note)}</td><td>${photo ? `<img class="thumb" data-act="zoom" src="${photo}" alt="Foto vom ${esc(fmtDate(e.date))}">` : ''}</td><td class="num"><button class="btn small" data-act="edit" data-id="${esc(e.id)}" type="button">✎</button> <button class="btn small danger" data-act="del-entry" data-id="${esc(e.id)}" type="button" aria-label="Eintrag löschen">✕</button></td></tr>`;
+    return `<tr><td class="num">${esc(fmtDate(e.date))}</td><td>${esc(e.phase || '–')}</td><td class="num">${nf(e.ec)}</td><td class="num">${fmtPh(e.ph)}</td><td class="num">${nf(e.waterTemp, 1)}</td><td class="num">${nf(e.airTemp, 1)}</td><td class="num">${nf(e.humidity, 0)}</td><td class="num">${nf(v)}</td><td class="num">${nf(e.ppfd, 0)}</td><td class="num">${nf(e.use, 1)}</td><td class="num">${nf(e.height, 1)}</td><td>${e.tags ? `<em>${esc(e.tags)}</em><br>` : ''}${esc(e.note)}</td><td>${photo ? `<img class="thumb" data-act="lightbox" data-id="${esc(e.id)}" src="${photo}" alt="Foto vom ${esc(fmtDate(e.date))}">` : ''}</td><td class="num"><button class="btn small" data-act="edit" data-id="${esc(e.id)}" type="button">✎</button> <button class="btn small danger" data-act="del-entry" data-id="${esc(e.id)}" type="button" aria-label="Eintrag löschen">✕</button></td></tr>`;
   }).join('');
+}
+function renderGallery() {
+  const list = sorted().reverse().filter(e => photoCache.has(e.id));
+  $('galleryGrid').innerHTML = list.map(e => `<button class="gthumb" type="button" data-act="lightbox" data-id="${esc(e.id)}"><img src="${photoCache.get(e.id)}" alt="Foto vom ${esc(fmtDate(e.date))}" loading="lazy"><span>${esc(fmtDate(e.date))}${e.height != null ? ' · ' + nf(e.height, 1) + ' cm' : ''}</span></button>`).join('');
+  $('galleryEmpty').classList.toggle('hidden', list.length > 0);
 }
 
 /* ---------- Diagramme ---------- */
 const CHARTS = [
   { id: 'cEc', get: e => e.ec, color: '--blue', band: p => p.ec, dec: 2, unit: '' },
   { id: 'cPh', get: e => e.ph, color: '--green', band: () => PH_RANGE, dec: 2, unit: '' },
-  { id: 'cVpd', get: vpdOf, color: '--green', band: p => p.vpd, dec: 2, unit: ' kPa' },
+  { id: 'cVpd', get: vpdOf, color: '--violet', band: p => p.vpd, dec: 2, unit: ' kPa' },
   { id: 'cAir', get: e => e.airTemp, color: '--orange', band: p => p.temp, dec: 1, unit: ' °C' },
-  { id: 'cRh', get: e => e.humidity, color: '--blue', band: p => p.rh, dec: 0, unit: ' %' },
+  { id: 'cRh', get: e => e.humidity, color: '--cyan', band: p => p.rh, dec: 0, unit: ' %' },
   { id: 'cWater', get: e => e.waterTemp, color: '--blue', band: () => WATER_RANGE, dec: 1, unit: ' °C' },
   { id: 'cPpfd', get: e => e.ppfd, color: '--orange', band: p => p.ppfd, dec: 0, unit: '' },
-  { id: 'cUse', get: e => e.use, color: '--green', band: () => null, dec: 1, unit: ' L' }
+  { id: 'cUse', get: e => e.use, color: '--cyan', band: () => null, dec: 1, unit: ' L' },
+  { id: 'cHeight', get: e => e.height, color: '--violet', band: () => null, dec: 1, unit: ' cm' }
 ];
+let rangeDays = 0;
+try { const r = parseInt(localStorage.getItem('autopot-range'), 10); if ([7, 14, 30].includes(r)) rangeDays = r; } catch (e) { /* ignore */ }
+const rgba = (hex, a) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+};
 const chartGeo = {};
 function drawChart(cfg, hover) {
   const c = $(cfg.id), dpr = window.devicePixelRatio || 1;
@@ -623,9 +988,9 @@ function drawChart(cfg, hover) {
   const grid = col('--border'), muted = col('--muted'), green = col('--green'), line = col(cfg.color), text = col('--text');
   const band = cfg.band(PROFILE[S.settings.phase] || PROFILE.Vegetation);
   x.font = '11px system-ui,sans-serif';
-  const pts = sorted().map(e => ({ t: Date.parse(e.date + 'T12:00:00'), v: cfg.get(e), d: e.date })).filter(p => p.v != null && Number.isFinite(p.v));
+  const pts = sorted().map(e => ({ t: Date.parse(e.date + 'T12:00:00'), v: cfg.get(e), d: e.date })).filter(p => p.v != null && Number.isFinite(p.v) && (!rangeDays || daysAgo(p.d) <= rangeDays));
   chartGeo[cfg.id] = [];
-  if (!pts.length) { x.fillStyle = muted; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('Keine Daten', w / 2, h / 2); return; }
+  if (!pts.length) { x.fillStyle = muted; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(rangeDays ? 'Keine Daten im Zeitraum' : 'Keine Daten', w / 2, h / 2); return; }
   let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
   if (band) { lo = Math.min(lo, band[0]); hi = Math.max(hi, band[1]); }
   const padv = (hi - lo) * 0.12 || 0.5; lo -= padv; hi += padv;
@@ -633,14 +998,18 @@ function drawChart(cfg, hover) {
   const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
   const px = t => t1 === t0 ? L + pw / 2 : L + (t - t0) / (t1 - t0) * pw;
   const py = v => T + (hi - v) / (hi - lo) * ph;
-  if (band) { x.globalAlpha = 0.16; x.fillStyle = green; x.fillRect(L, py(band[1]), pw, py(band[0]) - py(band[1])); x.globalAlpha = 1; }
-  x.strokeStyle = grid; x.lineWidth = 1; x.fillStyle = muted; x.textAlign = 'right'; x.textBaseline = 'middle';
+  if (band) {
+    x.fillStyle = rgba(green, 0.16); x.fillRect(L, py(band[1]), pw, py(band[0]) - py(band[1]));
+    x.strokeStyle = rgba(green, 0.45); x.lineWidth = 1; x.setLineDash([3, 3]);
+    [band[0], band[1]].forEach(b => { x.beginPath(); x.moveTo(L, py(b)); x.lineTo(w - R, py(b)); x.stroke(); });
+    x.setLineDash([]);
+  }
+  x.strokeStyle = rgba(grid, 0.8); x.lineWidth = 1; x.fillStyle = muted; x.textAlign = 'right'; x.textBaseline = 'middle';
   for (let i = 0; i <= 4; i++) {
     const v = lo + (hi - lo) * i / 4, y = py(v);
     x.beginPath(); x.moveTo(L, y); x.lineTo(w - R, y); x.stroke();
     x.fillText(nf(v, cfg.dec), L - 6, y);
   }
-  /* Datumsmarken: bis zu 4 gleichmäßig verteilte Zeitpunkte */
   x.textBaseline = 'top';
   if (t1 === t0) { x.textAlign = 'center'; x.fillText(shortDate(t0), px(t0), h - B + 8); }
   else {
@@ -651,18 +1020,34 @@ function drawChart(cfg, hover) {
       x.fillText(shortDate(tt), px(tt), h - B + 8);
     }
   }
-  x.strokeStyle = line; x.lineWidth = 2.5; x.lineJoin = 'round'; x.beginPath();
-  pts.forEach((p, i) => i ? x.lineTo(px(p.t), py(p.v)) : x.moveTo(px(p.t), py(p.v)));
-  x.stroke();
-  x.fillStyle = line;
-  pts.forEach(p => { x.beginPath(); x.arc(px(p.t), py(p.v), 3.5, 0, Math.PI * 2); x.fill(); });
-  chartGeo[cfg.id] = pts.map(p => ({ x: px(p.t), y: py(p.v), v: p.v, d: p.d }));
+  const P = pts.map(p => ({ x: px(p.t), y: py(p.v) }));
+  const trace = () => {
+    x.moveTo(P[0].x, P[0].y);
+    if (P.length === 2) x.lineTo(P[1].x, P[1].y);
+    else if (P.length > 2) {
+      for (let i = 1; i < P.length - 1; i++) x.quadraticCurveTo(P[i].x, P[i].y, (P[i].x + P[i + 1].x) / 2, (P[i].y + P[i + 1].y) / 2);
+      x.lineTo(P[P.length - 1].x, P[P.length - 1].y);
+    }
+  };
+  if (P.length > 1) {
+    const gr = x.createLinearGradient(0, T, 0, T + ph);
+    gr.addColorStop(0, rgba(line, 0.32)); gr.addColorStop(1, rgba(line, 0));
+    x.beginPath(); trace(); x.lineTo(P[P.length - 1].x, T + ph); x.lineTo(P[0].x, T + ph); x.closePath();
+    x.fillStyle = gr; x.fill();
+    x.strokeStyle = line; x.lineWidth = 2.6; x.lineJoin = 'round'; x.lineCap = 'round';
+    x.beginPath(); trace(); x.stroke();
+  }
+  P.forEach(q => {
+    x.fillStyle = cs.getPropertyValue('--surface').trim() || '#fff'; x.beginPath(); x.arc(q.x, q.y, 5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = line; x.beginPath(); x.arc(q.x, q.y, 3.4, 0, Math.PI * 2); x.fill();
+  });
+  chartGeo[cfg.id] = pts.map((p, i) => ({ x: P[i].x, y: P[i].y, v: p.v, d: p.d }));
   if (hover != null && chartGeo[cfg.id][hover]) {
     const g = chartGeo[cfg.id][hover];
     x.strokeStyle = text; x.globalAlpha = 0.35; x.setLineDash([4, 3]);
     x.beginPath(); x.moveTo(g.x, T); x.lineTo(g.x, T + ph); x.stroke();
     x.setLineDash([]); x.globalAlpha = 1;
-    x.fillStyle = line; x.beginPath(); x.arc(g.x, g.y, 6, 0, Math.PI * 2); x.fill();
+    x.fillStyle = line; x.beginPath(); x.arc(g.x, g.y, 6.5, 0, Math.PI * 2); x.fill();
     x.strokeStyle = text; x.lineWidth = 2; x.stroke();
   }
 }
@@ -695,7 +1080,14 @@ function bindChartHover() {
 }
 
 function renderCharts() {
-  CHARTS.forEach(cfg => drawChart(cfg));
+  const es = sorted();
+  CHARTS.forEach(cfg => {
+    drawChart(cfg);
+    let last = null;
+    for (let i = es.length - 1; i >= 0; i--) { const v = cfg.get(es[i]); if (v != null && Number.isFinite(v)) { last = v; break; } }
+    const cur = $(cfg.id).closest('.card').querySelector('.cur');
+    if (cur) cur.textContent = last == null ? '' : nf(last, cfg.dec) + cfg.unit;
+  });
   const groups = {};
   S.entries.forEach(e => { (groups[e.phase || 'Ohne Phase'] ??= []).push(e); });
   const rank = k => PHASES.indexOf(k) < 0 ? 99 : PHASES.indexOf(k);
@@ -707,6 +1099,25 @@ function renderCharts() {
   }).join('') || '<p class="sub">Noch keine Daten.</p>';
 }
 
+/* ---------- Rechner ---------- */
+function renderHeatmap() {
+  const band = (PROFILE[S.settings.phase] || PROFILE.Vegetation).vpd;
+  const off = num($('hLeaf').value) || 0;
+  const temps = [20, 22, 24, 26, 28, 30, 32], rhs = [30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
+  const e = sorted().filter(x => x.airTemp != null && x.humidity != null).pop();
+  const near = (list, v) => list.reduce((b, c) => Math.abs(c - v) < Math.abs(b - v) ? c : b, list[0]);
+  const curT = e ? near(temps, e.airTemp) : null, curR = e ? near(rhs, e.humidity) : null;
+  let html = '<thead><tr><th>rF \\ °C</th>' + temps.map(t => `<th>${t}</th>`).join('') + '</tr></thead><tbody>';
+  rhs.forEach(r => {
+    html += `<tr><th>${r} %</th>` + temps.map(t => {
+      const v = Math.max(0, svp(t + off) - svp(t) * r / 100);
+      const cls = v < band[0] ? 'lo' : v <= band[1] ? 'ok' : v <= band[1] + 0.4 ? 'hi' : 'xh';
+      return `<td class="${cls}${t === curT && r === curR ? ' now' : ''}" title="${t} °C, ${r} % rF: ${nf(v)} kPa">${nf(v, 1)}</td>`;
+    }).join('') + '</tr>';
+  });
+  $('vpdMap').innerHTML = html + '</tbody>';
+  $('heatNote').textContent = `Ziel ${rng(band, ' kPa')} (${S.settings.phase})${e ? ' · Rahmen = letzter Eintrag' : ''}`;
+}
 function renderCalc() {
   const v = calcVpd(num($('vTemp').value), num($('vRh').value));
   const [lbl, cls] = rangeChip(v, (PROFILE[S.settings.phase] || PROFILE.Vegetation).vpd);
@@ -726,6 +1137,30 @@ function renderCalc() {
     const days = Math.floor(rest / use), dt = new Date(); dt.setDate(dt.getDate() + days);
     $('tOut').innerHTML = `Restlaufzeit: <strong>${days} Tage</strong><br>Nachfüllen spätestens: <strong>${dt.toLocaleDateString('de-DE')}</strong><br>Füllstand: ${nf(rest, 1)} von ${nf(S.settings.tankSize, 1)} L`;
   } else $('tOut').textContent = 'Verbrauch pro Tag eintragen.';
+  const pf = num($('dPpfd').value), hrs = num($('dHours').value);
+  if (pf == null || hrs == null || hrs <= 0 || hrs > 24) $('dOut').textContent = '–';
+  else {
+    const dli = pf * 3600 * hrs / 1e6, pr = (PROFILE[S.settings.phase] || PROFILE.Vegetation).ppfd;
+    const tr = pr ? [pr[0] * hrs * 0.0036, pr[1] * hrs * 0.0036] : null;
+    const [l2, c2] = rangeChip(dli, tr);
+    $('dOut').innerHTML = `<strong>${nf(dli, 1)} mol/m²/Tag</strong>${tr ? ` <span class="chip ${c2}">${l2}</span><br><span class="sub">Zielbereich der Phase bei ${nf(hrs, 1)} h: ${nf(tr[0], 1)}–${nf(tr[1], 1)}</span>` : '<br><span class="sub">Für die Endphase gibt es keine feste Vorgabe.</span>'}`;
+  }
+  renderHeatmap();
+}
+
+/* ---------- Ernte & Archiv ---------- */
+function renderHarvest() {
+  const h = S.harvest, gi = growInfo();
+  const cards = [];
+  if (h.dry != null) cards.push(['Trockengewicht', nf(h.dry, 1) + ' g']);
+  if (h.wet != null && h.dry != null && h.wet > 0) cards.push(['Trocknungsverlust', nf((1 - h.dry / h.wet) * 100, 0) + ' %']);
+  if (h.dry != null && h.watt) cards.push(['Ertrag pro Watt', nf(h.dry / h.watt, 2) + ' g/W']);
+  if (h.date && gi) cards.push(['Dauer bis Ernte', Math.max(1, dayDiff(gi.start, h.date) + 1) + ' Tage']);
+  if (h.date && gi && h.dry != null) cards.push(['Ertrag pro Tag', nf(h.dry / Math.max(1, dayDiff(gi.start, h.date) + 1), 2) + ' g']);
+  $('hOut').innerHTML = cards.map(([t, v]) => `<div class="card"><h3>${esc(t)}</h3><div class="value">${esc(v)}</div></div>`).join('') || '<p class="sub">Trage Erntedatum und Gewichte ein – dann werden Ertrag, Trocknungsverlust und g/W berechnet.</p>';
+}
+function renderArchive() {
+  $('archiveList').innerHTML = S.archive.map(a => `<div class="item"><div><strong>${esc(a.name || 'Grow')}</strong> <span class="meta">${esc(a.start ? fmtDate(a.start) : '–')} → ${esc(a.end ? fmtDate(a.end) : '–')}${a.days ? ` · ${a.days} Tage` : ''}</span><p>${a.entries} Einträge${a.dry != null ? ` · ${nf(a.dry, 1)} g trocken` : ''}${a.dry != null && a.watt ? ` (${nf(a.dry / a.watt, 2)} g/W)` : ''}${a.avgEc != null ? ` · Ø EC ${nf(a.avgEc)}` : ''}${a.avgPh != null ? ` · Ø pH ${nf(a.avgPh)}` : ''}</p></div><button class="btn small danger" data-act="del-archive" data-id="${esc(a.id)}" type="button" aria-label="Archiv-Eintrag löschen">✕</button></div>`).join('') || '<p class="sub">Noch keine abgeschlossenen Grows.</p>';
 }
 
 function renderLists() {
@@ -733,6 +1168,7 @@ function renderLists() {
   const ev = S.events.slice().sort((a, b) => a.date.localeCompare(b.date));
   $('eventList').innerHTML = ev.map(e => `<div class="item"><div><strong>${esc(fmtDate(e.date))} · ${esc(e.title)}</strong><p>${esc(e.note)}</p></div><button class="btn small danger" data-act="del-event" data-id="${esc(e.id)}" type="button" aria-label="Ereignis löschen">✕</button></div>`).join('') || '<p class="sub">Noch keine Meilensteine.</p>';
 }
+
 
 /* ---------- Erinnerungen ---------- */
 const STEP = { daily: 1, weekly: 7 };
@@ -829,11 +1265,11 @@ function renderChecks() {
 }
 
 function renderAll() {
-  renderDashboard(); renderLog(); renderCharts(); renderCalc(); renderLists(); renderReminders(); renderChecks();
+  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks();
 }
 
 /* ---------- Formular ---------- */
-const FORM_IDS = ['fEc', 'fPh', 'fWater', 'fAir', 'fRh', 'fPpfd', 'fUse', 'fTags', 'fNote'];
+const FORM_IDS = ['fEc', 'fPh', 'fWater', 'fAir', 'fRh', 'fPpfd', 'fUse', 'fHeight', 'fTags', 'fNote'];
 function setPhoto(data, dirty) {
   pendingPhoto = data || ''; photoDirty = !!dirty;
   const img = $('photoPreview');
@@ -858,7 +1294,7 @@ function startEdit(id) {
   $('fDate').value = e.date;
   $('fPhase').value = PHASES.includes(e.phase) ? e.phase : S.settings.phase;
   const set = (el, v) => { $(el).value = v ?? ''; };
-  set('fEc', e.ec); set('fPh', e.ph); set('fWater', e.waterTemp); set('fAir', e.airTemp); set('fRh', e.humidity); set('fPpfd', e.ppfd); set('fUse', e.use); set('fTags', e.tags); set('fNote', e.note);
+  set('fEc', e.ec); set('fPh', e.ph); set('fWater', e.waterTemp); set('fAir', e.airTemp); set('fRh', e.humidity); set('fPpfd', e.ppfd); set('fUse', e.use); set('fHeight', e.height); set('fTags', e.tags); set('fNote', e.note);
   setPhoto(photoCache.get(id) || '', false);
   $('formTitle').textContent = 'Eintrag bearbeiten';
   $('saveEntry').textContent = 'Änderung speichern';
@@ -868,12 +1304,12 @@ function startEdit(id) {
 async function saveEntry() {
   const date = $('fDate').value;
   if (!date) { toast('Bitte ein Datum angeben.', true); return; }
-  const raw = { ec: $('fEc').value, ph: $('fPh').value, waterTemp: $('fWater').value, airTemp: $('fAir').value, humidity: $('fRh').value, ppfd: $('fPpfd').value, use: $('fUse').value };
+  const raw = { ec: $('fEc').value, ph: $('fPh').value, waterTemp: $('fWater').value, airTemp: $('fAir').value, humidity: $('fRh').value, ppfd: $('fPpfd').value, use: $('fUse').value, height: $('fHeight').value };
   const e = normEntry(Object.assign({ id: editingId || uid(), date, phase: $('fPhase').value, tags: $('fTags').value.trim(), note: $('fNote').value.trim() }, raw));
   if (!e) { toast('Ungültiges Datum.', true); return; }
   if (e.ph != null && (e.ph < 0 || e.ph > 14)) { toast('pH muss zwischen 0 und 14 liegen.', true); return; }
   if (e.humidity != null && (e.humidity < 0 || e.humidity > 100)) { toast('Luftfeuchte muss zwischen 0 und 100 % liegen.', true); return; }
-  if ([e.ec, e.ph, e.waterTemp, e.airTemp, e.humidity, e.ppfd, e.use].every(v => v == null) && !e.note && !pendingPhoto) { toast('Bitte mindestens einen Messwert, eine Notiz oder ein Foto eintragen.', true); return; }
+  if ([e.ec, e.ph, e.waterTemp, e.airTemp, e.humidity, e.ppfd, e.use, e.height].every(v => v == null) && !e.note && !pendingPhoto) { toast('Bitte mindestens einen Messwert, eine Notiz oder ein Foto eintragen.', true); return; }
   let hasPhoto = photoCache.has(e.id);
   if (photoDirty) {
     try {
@@ -911,7 +1347,7 @@ function download(name, text, type) {
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-const CSV_HEAD = ['Datum', 'Phase', 'EC', 'pH', 'Wassertemperatur', 'Lufttemperatur', 'Luftfeuchte', 'VPD', 'PPFD', 'Verbrauch', 'Notiz', 'Tags'];
+const CSV_HEAD = ['Datum', 'Phase', 'EC', 'pH', 'Wassertemperatur', 'Lufttemperatur', 'Luftfeuchte', 'VPD', 'PPFD', 'Verbrauch', 'Notiz', 'Tags', 'Höhe'];
 function csvCell(v) {
   let s = String(v ?? '');
   if (/^[=+@\t\r]/.test(s) || /^-[^\d.,]/.test(s)) s = "'" + s;
@@ -919,7 +1355,7 @@ function csvCell(v) {
 }
 function exportCsv() {
   const n = (v, d) => v == null ? '' : String(Number(v.toFixed(d))).replace('.', ',');
-  const rows = sorted().map(e => [e.date, e.phase, n(e.ec, 2), n(e.ph, 2), n(e.waterTemp, 1), n(e.airTemp, 1), n(e.humidity, 0), n(vpdOf(e), 2), n(e.ppfd, 0), n(e.use, 1), e.note, e.tags]);
+  const rows = sorted().map(e => [e.date, e.phase, n(e.ec, 2), n(e.ph, 2), n(e.waterTemp, 1), n(e.airTemp, 1), n(e.humidity, 0), n(vpdOf(e), 2), n(e.ppfd, 0), n(e.use, 1), e.note, e.tags, n(e.height, 1)]);
   download('autopot-grow-log.csv', '\ufeff' + [CSV_HEAD, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n') + '\r\n', 'text/csv;charset=utf-8');
   toast('CSV exportiert.');
 }
@@ -948,7 +1384,7 @@ function parseCsv(text) {
   row.push(cur); if (row.some(c => c !== '')) rows.push(row);
   return rows;
 }
-const CSV_MAP = { datum: 'date', phase: 'phase', ec: 'ec', ph: 'ph', wassertemperatur: 'waterTemp', lufttemperatur: 'airTemp', luftfeuchte: 'humidity', ppfd: 'ppfd', verbrauch: 'use', notiz: 'note', tags: 'tags' };
+const CSV_MAP = { datum: 'date', phase: 'phase', ec: 'ec', ph: 'ph', wassertemperatur: 'waterTemp', lufttemperatur: 'airTemp', luftfeuchte: 'humidity', ppfd: 'ppfd', verbrauch: 'use', notiz: 'note', tags: 'tags', höhe: 'height', hoehe: 'height' };
 function csvToEntries(text) {
   const rows = parseCsv(text);
   if (rows.length < 2) return [];
@@ -1001,16 +1437,59 @@ async function restorePrev() {
 
 /* ---------- Einstellungen / Theme ---------- */
 function loadSettings() {
-  $('sName').value = S.settings.name; $('sPhase').value = S.settings.phase;
-  $('sTankSize').value = S.settings.tankSize; $('sTankRest').value = S.settings.tankRest; $('sDailyUse').value = S.settings.dailyUse;
+  const s = S.settings;
+  $('sName').value = s.name; $('sPhase').value = s.phase; $('sStart').value = s.startDate || '';
+  $('sTankSize').value = s.tankSize; $('sTankRest').value = s.tankRest; $('sDailyUse').value = s.dailyUse; $('sInterval').value = s.tankInterval;
+  const h = S.harvest;
+  $('hDate').value = h.date || ''; $('hWet').value = h.wet ?? ''; $('hDry').value = h.dry ?? ''; $('hWatt').value = h.watt ?? ''; $('hNote').value = h.note || '';
 }
 function onSettings() {
-  const s = S.settings;
+  const s = S.settings, old = s.phase;
   s.name = $('sName').value.slice(0, 60); s.phase = $('sPhase').value;
+  s.startDate = /^\d{4}-\d{2}-\d{2}$/.test($('sStart').value) ? $('sStart').value : null;
   s.tankSize = num($('sTankSize').value) ?? s.tankSize; s.tankRest = num($('sTankRest').value) ?? s.tankRest; s.dailyUse = num($('sDailyUse').value) ?? s.dailyUse;
+  const iv = num($('sInterval').value); if (iv != null && iv >= 1) s.tankInterval = Math.round(iv);
+  if (old !== s.phase) {
+    s.phaseStart = todayStr();
+    S.events.push({ id: uid(), date: todayStr(), title: 'Phase: ' + s.phase, note: '' });
+    renderLists();
+  }
   save();
   if (!editingId) $('fPhase').value = s.phase;
-  renderDashboard(); renderCharts(); renderCalc();
+  renderDashboard(); renderCharts(); renderCalc(); renderHarvest();
+}
+function onHarvest() {
+  S.harvest = { date: /^\d{4}-\d{2}-\d{2}$/.test($('hDate').value) ? $('hDate').value : '', wet: num($('hWet').value), dry: num($('hDry').value), watt: num($('hWatt').value), note: $('hNote').value.slice(0, 300) };
+  save(); renderHarvest();
+}
+function tankChange() {
+  const s = S.settings;
+  s.lastTankChange = todayStr(); s.tankRest = s.tankSize;
+  S.events.push({ id: uid(), date: todayStr(), title: 'Tank gewechselt', note: `${nf(s.tankSize, 1)} L frisch angesetzt` });
+  save(); loadSettings(); renderAll();
+  toast('Tankwechsel notiert, Tank wieder voll.');
+}
+function newGrow() {
+  if (!S.entries.length && !S.settings.startDate) { toast('Es gibt noch nichts abzuschließen.', true); return; }
+  if (!confirm('Grow abschließen und neu starten?\n\nZuerst wird ein Backup heruntergeladen. Der Grow landet im Archiv, Protokoll, Timeline und Ernte werden geleert (Rezepte und Erinnerungen bleiben). Über „Letzten Import rückgängig machen“ kannst du den Stand zurückholen.')) return;
+  exportJson();
+  const es = sorted(), h = S.harvest;
+  const avg = fn => { const v = es.map(fn).filter(z => z != null && Number.isFinite(z)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const start = S.settings.startDate || (es[0] && es[0].date) || null;
+  const end = h.date || (es.length ? es[es.length - 1].date : todayStr());
+  const item = { id: uid(), name: S.settings.name || 'Grow', start, end, entries: es.length, days: start ? Math.max(1, dayDiff(start, end) + 1) : null, wet: h.wet, dry: h.dry, watt: h.watt, avgEc: avg(e => e.ec), avgPh: avg(e => e.ph) };
+  const keep = new Set();
+  try {
+    localStorage.setItem(KEY + '-prev', ser(S));
+    (JSON.parse(localStorage.getItem(KEY + '-prev')).entries || []).forEach(e => { if (e.hasPhoto) keep.add(e.id); });
+  } catch (e) { /* ignore */ }
+  S.archive.unshift(item);
+  S.entries = []; S.events = []; S.harvest = blank().harvest; S.checks.week = {};
+  Object.assign(S.settings, { startDate: null, phaseStart: null, lastTankChange: null, phase: PHASES[0], tankRest: S.settings.tankSize });
+  [...photoCache.keys()].forEach(id => { if (!keep.has(id)) dropPhoto(id); });
+  save(); loadSettings(); resetForm(); renderAll();
+  toast('Grow archiviert. Neues Protokoll gestartet.');
+  $('dashboard').scrollIntoView({ behavior: 'smooth' });
 }
 const THEMES = { system: '🌗 System', light: '☀️ Hell', dark: '🌙 Dunkel' };
 const readTheme = () => { try { const t = localStorage.getItem('autopot-theme'); return t === 'light' || t === 'dark' ? t : 'system'; } catch (e) { return 'system'; } };
@@ -1019,8 +1498,38 @@ function applyTheme(p) {
   if (p === 'system') delete root.dataset.theme; else root.dataset.theme = p;
   $('themeToggle').textContent = THEMES[p];
   const dark = p === 'dark' || (p === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#101611' : '#f5f7f5');
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#09100c' : '#eef4ef');
 }
+
+/* ---------- Dialoge, Lightbox, Navigation ---------- */
+const openDlg = id => { const d = $(id); if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); } };
+const closeDlg = id => { const d = $(id); if (d.open) { if (d.close) d.close(); else d.removeAttribute('open'); } };
+const lb = { list: [], i: 0 };
+function showLb() {
+  const id = lb.list[lb.i], e = S.entries.find(x => x.id === id);
+  if (!e || !photoCache.has(id)) return;
+  $('lbImg').src = photoCache.get(id);
+  $('lbCap').textContent = `${fmtDate(e.date)} · ${e.phase || '–'}${e.height != null ? ' · ' + nf(e.height, 1) + ' cm' : ''}  (${lb.i + 1}/${lb.list.length})`;
+  $('lbNote').textContent = e.note || '';
+  $('lbPrev').disabled = lb.i <= 0; $('lbNext').disabled = lb.i >= lb.list.length - 1;
+}
+function openLightbox(id) {
+  lb.list = sorted().filter(e => photoCache.has(e.id)).map(e => e.id);
+  lb.i = Math.max(0, lb.list.indexOf(id));
+  showLb(); openDlg('lightbox');
+}
+const SECTIONS = ['dashboard', 'log', 'charts', 'gallery', 'calc', 'harvest', 'recipes', 'timeline', 'reminders', 'diagnose', 'checks'];
+let navRaf = 0;
+function updateNav() {
+  navRaf = 0;
+  let cur = SECTIONS[0];
+  SECTIONS.forEach(id => { if ($(id).getBoundingClientRect().top <= 150) cur = id; });
+  document.querySelectorAll('nav.tabs a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  const main4 = ['dashboard', 'log', 'charts', 'calc'];
+  document.querySelectorAll('.bottomnav [data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === cur));
+  $('moreBtn').classList.toggle('on', !main4.includes(cur));
+}
+const QUICK_TAGS = ['pH korrigiert', 'Tank gewechselt', 'Gedüngt', 'Entlaubt', 'LST / Training', 'Umgetopft', 'Schädlinge', 'Mangel', 'Filter gereinigt'];
 
 /* ---------- Events ---------- */
 document.addEventListener('click', ev => {
@@ -1028,14 +1537,21 @@ document.addEventListener('click', ev => {
   if (!b) return;
   const id = b.dataset.id;
   switch (b.dataset.act) {
-    case 'zoom': b.classList.toggle('zoom'); break;
+    case 'lightbox': openLightbox(id); break;
     case 'edit': startEdit(id); break;
     case 'backup': exportJson(); break;
+    case 'tag': {
+      const cur = $('fTags').value.split(',').map(x => x.trim()).filter(Boolean);
+      if (!cur.includes(b.dataset.tag)) cur.push(b.dataset.tag);
+      $('fTags').value = cur.join(', ').slice(0, 120);
+      break;
+    }
     case 'del-entry':
       if (confirm('Diesen Eintrag löschen?')) { S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id); if (editingId === id) resetForm(); save(); renderAll(); }
       break;
     case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); save(); renderLists(); break;
     case 'del-event': S.events = S.events.filter(r => r.id !== id); save(); renderLists(); break;
+    case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); save(); renderArchive(); break;
     case 'del-rem': S.reminders = S.reminders.filter(r => r.id !== id); save(); renderReminders(); break;
     case 'rem-done': {
       const r = S.reminders.find(x => x.id === id);
@@ -1054,16 +1570,25 @@ document.addEventListener('change', ev => {
 
 async function init() {
   await initPhotos();
-  fillSelect($('sPhase')); fillSelect($('fPhase')); fillSelect($('rPhase'), true);
+  fillSelect($('sPhase')); fillSelect($('fPhase')); fillSelect($('rPhase'), true); fillSelect($('lPhase'), true);
+  $('lPhase').options[0].textContent = 'Alle Phasen';
   loadSettings(); resetForm(); renderSymptoms();
   $('tDate').value = todayStr(); $('mDate').value = todayStr();
+  $('tagChips').innerHTML = QUICK_TAGS.map(t => `<button class="qchip" type="button" data-act="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
+  $('ppPpm').value = Math.round((num($('ppEc').value) || 0) * Number($('ppScale').value));
+  document.querySelectorAll('#rangeSeg button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.range) === rangeDays)));
   applyTheme(readTheme());
   renderAll();
   bindChartHover();
 
-  ['sName', 'sTankSize', 'sTankRest', 'sDailyUse'].forEach(id => $(id).addEventListener('input', onSettings));
+  ['sName', 'sStart', 'sTankSize', 'sTankRest', 'sDailyUse', 'sInterval'].forEach(id => $(id).addEventListener('input', onSettings));
   $('sPhase').addEventListener('change', onSettings);
-  ['vTemp', 'vRh', 'eBase', 'eTarget', 'eLiter', 'pCur', 'pTar', 'wOldL', 'wOldEc', 'wNewL', 'wNewEc'].forEach(id => $(id).addEventListener('input', renderCalc));
+  ['hDate', 'hWet', 'hDry', 'hWatt', 'hNote'].forEach(id => $(id).addEventListener('input', onHarvest));
+  ['vTemp', 'vRh', 'eBase', 'eTarget', 'eLiter', 'pCur', 'pTar', 'wOldL', 'wOldEc', 'wNewL', 'wNewEc', 'dPpfd', 'dHours', 'hLeaf'].forEach(id => $(id).addEventListener('input', renderCalc));
+  const ppFromEc = () => { const e = num($('ppEc').value); $('ppPpm').value = e == null ? '' : Math.round(e * Number($('ppScale').value)); };
+  $('ppEc').addEventListener('input', ppFromEc);
+  $('ppScale').addEventListener('change', ppFromEc);
+  $('ppPpm').addEventListener('input', () => { const p = num($('ppPpm').value); $('ppEc').value = p == null ? '' : Number((p / Number($('ppScale').value)).toFixed(2)); });
 
   $('saveEntry').addEventListener('click', saveEntry);
   $('cancelEdit').addEventListener('click', () => resetForm());
@@ -1074,18 +1599,61 @@ async function init() {
     if (!f) return;
     try { setPhoto(await resizeImage(f), true); } catch (e) { toast('Das Foto konnte nicht verarbeitet werden.', true); }
   });
+  $('lSearch').addEventListener('input', () => { LF.q = $('lSearch').value; LF.limit = 25; renderLog(); });
+  $('lPhase').addEventListener('change', () => { LF.phase = $('lPhase').value; LF.limit = 25; renderLog(); });
+  $('lPhoto').addEventListener('change', () => { LF.photo = $('lPhoto').checked; LF.limit = 25; renderLog(); });
+  $('logMore').addEventListener('click', () => { LF.limit += 25; renderLog(); });
+  document.querySelectorAll('#rangeSeg button').forEach(b => b.addEventListener('click', () => {
+    rangeDays = Number(b.dataset.range);
+    try { localStorage.setItem('autopot-range', String(rangeDays)); } catch (e) { /* ignore */ }
+    document.querySelectorAll('#rangeSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderCharts();
+  }));
 
-  $('exportCsv').addEventListener('click', exportCsv);
-  $('backupJson').addEventListener('click', exportJson);
+  /* Daten-Dialog */
+  $('dataBtn').addEventListener('click', () => openDlg('dataDlg'));
+  $('moreBtn').addEventListener('click', () => openDlg('moreSheet'));
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeDlg(b.dataset.close)));
+  document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', ev => { if (ev.target === d) closeDlg(d.id); }));
+  $('moreSheet').addEventListener('click', ev => {
+    const a = ev.target.closest('a');
+    if (!a) return;
+    closeDlg('moreSheet');
+    if (a.dataset.open) { ev.preventDefault(); openDlg(a.dataset.open); }
+  });
+  $('lbPrev').addEventListener('click', () => { if (lb.i > 0) { lb.i--; showLb(); } });
+  $('lbNext').addEventListener('click', () => { if (lb.i < lb.list.length - 1) { lb.i++; showLb(); } });
+  document.addEventListener('keydown', ev => {
+    if (!$('lightbox').open) return;
+    if (ev.key === 'ArrowLeft') $('lbPrev').click();
+    if (ev.key === 'ArrowRight') $('lbNext').click();
+  });
+
+  $('exportCsv').addEventListener('click', () => { closeDlg('dataDlg'); exportCsv(); });
+  $('backupJson').addEventListener('click', () => { closeDlg('dataDlg'); exportJson(); });
   $('exportIcs').addEventListener('click', exportIcs);
   $('restorePrev').addEventListener('click', restorePrev);
-  $('importFile').addEventListener('change', ev => { if (ev.target.files[0]) importFile(ev.target.files[0]); ev.target.value = ''; });
+  $('importFile').addEventListener('change', ev => { closeDlg('dataDlg'); if (ev.target.files[0]) importFile(ev.target.files[0]); ev.target.value = ''; });
+  $('tankChange').addEventListener('click', tankChange);
+  $('newGrow').addEventListener('click', newGrow);
+  ['printBtn', 'printBtn2'].forEach(id => $(id).addEventListener('click', () => { closeDlg('dataDlg'); setTimeout(() => window.print(), 50); }));
   $('themeToggle').addEventListener('click', () => {
     const order = ['system', 'light', 'dark'], next = order[(order.indexOf(readTheme()) + 1) % 3];
     try { localStorage.setItem('autopot-theme', next); } catch (e) { /* ignore */ }
     applyTheme(next); renderCharts();
   });
   if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { applyTheme(readTheme()); renderCharts(); });
+
+  /* App installieren */
+  let deferred = null;
+  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferred = ev; $('installBtn').classList.remove('hidden'); });
+  window.addEventListener('appinstalled', () => { deferred = null; $('installBtn').classList.add('hidden'); toast('App installiert.'); });
+  $('installBtn').addEventListener('click', async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    try { await deferred.userChoice; } catch (e) { /* ignore */ }
+    deferred = null; $('installBtn').classList.add('hidden');
+  });
 
   $('saveRecipe').addEventListener('click', () => {
     const name = $('rName').value.trim();
@@ -1119,8 +1687,17 @@ async function init() {
 
   let rt;
   window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderCharts, 150); });
+  window.addEventListener('scroll', () => { if (!navRaf) navRaf = requestAnimationFrame(updateNav); }, { passive: true });
+  updateNav();
   setInterval(tick, 60000);
   tick();
+
+  /* Einblend-Animation (nicht bei reduzierter Bewegung) */
+  if ('IntersectionObserver' in window && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('js-reveal');
+    const io = new IntersectionObserver(list => list.forEach(x => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { rootMargin: '0px 0px -4% 0px' });
+    document.querySelectorAll('main > section').forEach(s => io.observe(s));
+  }
 
   /* Offline-Nutzung (nur über http/https, nicht bei file://) */
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -40,5 +40,5 @@ Bitte nicht öffentlich als Issue, sondern vertraulich an die in `/.well-known/s
 
 ## Für Prüfer
 
-- Einstieg: `server/server.js` (`api()`), `server/crypto.js`, `server/totp.js`, `app.js` (Abschnitt „Cloud-Konto“), `qr.js`, `pow-worker.js`.
+- Einstieg: `server/server.js` (`api()`), `server/crypto.js`, `server/totp.js`, `js/cloud.js` (Konto und Synchronisation), `qr.js`, `pow-worker.js`.
 - Tests: `npm test` (Server, App, End-to-End), `npm run test:load`.

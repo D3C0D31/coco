@@ -130,6 +130,26 @@ Ersten Admin auf dem Server festlegen: Konto in der App anlegen, Zwei-Faktor-Anm
 
 Backups älterer Versionen werden beim Import ergänzt. `data/autopot-grow-backup.json` enthält den bisherigen Datenstand zum Import.
 
+## Aufbau des Codes
+
+Kein Build-Schritt, keine Fremdpakete. Die App besteht aus klassischen Skripten in `js/`, die sich einen gemeinsamen Skript-Bereich teilen – dadurch läuft sie weiterhin auch per Doppelklick (`file://`). Die **Reihenfolge in `app.html` ist wichtig**:
+
+| Datei | Inhalt |
+|---|---|
+| `js/core.js` | Konstanten und Richtwerte (`PROFILE`), Hilfsfunktionen, Datenmodell (`normalize`, `load`, `save`), Foto-Speicher (IndexedDB) |
+| `js/analysis.js` | Bewertung: Zielbereiche, Grow-Infos, Score, Serie, Auffälligkeiten und Trendwarnungen |
+| `js/views.js` | Übersicht, Protokoll-Tabelle, Galerie |
+| `js/charts.js` | Diagramme (Canvas, Zielband, Zeitraum, Tooltip) |
+| `js/tools.js` | Rechner, VPD-Heatmap, Ernte & Archiv, Erinnerungen und Kalenderexport, Diagnose, Checklisten |
+| `js/data.js` | Eingabeformular, Export/Import (JSON, CSV), Einstellungen, Theme, Dialoge, Navigation |
+| `js/features.js` | Wissen, Wochenbericht, Prognose, Strom, verschlüsseltes Backup, Sorten, Fahrplan, Heute, News, Teilen, Hygrometer-Import, Vorher/Nachher |
+| `js/cloud.js` | Konto und Synchronisation, Anmeldung, Zwei-Faktor, Geräte, Sicherheitsprotokoll |
+| `js/main.js` | Ereignis-Verteilung und `init()` – immer zuletzt laden |
+
+Dazu kommen eigenständige Seiten-Skripte (`site.js`, `news.js`, `share.js`, `admin.js`, `anleitung.js`) und kleine Bibliotheken ohne Abhängigkeiten (`qr.js`, `newsfmt.js`, `pow-worker.js`). Server: `server/server.js` (Kern, Konten, Daten), `server/routes.js` (News, Teilen, Team-Bereich), `server/crypto.js`, `server/totp.js`, `server/db.js` (Schema und Migrationen), dazu `admin.js`, `backup.js`, `restore.js` für die Kommandozeile.
+
+Neue Funktion einbauen: Logik in die passende Datei, Bedienelemente in `app.html`, Verdrahtung in `init()` (`js/main.js`), dann einen Test in `tests/` ergänzen.
+
 ## Tests
 
 ```

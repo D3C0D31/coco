@@ -244,10 +244,10 @@ test('Härtung: Content-Type, Cache, robots/security.txt, Header', async () => {
   assert.equal(r.status, 415);
   const cross = await fetch(base + '/api/login', { method: 'POST', headers: Object.assign({ 'Sec-Fetch-Site': 'cross-site' }, H), body: '{}' });
   assert.equal(cross.status, 403);
-  const app = await fetch(base + '/app.js');
+  const app = await fetch(base + '/js/core.js');
   const etag = app.headers.get('etag');
   assert.ok(etag);
-  assert.equal((await fetch(base + '/app.js', { headers: { 'If-None-Match': etag } })).status, 304);
+  assert.equal((await fetch(base + '/js/core.js', { headers: { 'If-None-Match': etag } })).status, 304);
   assert.match(await (await fetch(base + '/robots.txt')).text(), /Disallow: \/api\//);
   const fav = await fetch(base + '/favicon.ico');
   assert.equal(fav.status, 200); assert.equal(fav.headers.get('content-type'), 'image/png');

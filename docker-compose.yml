@@ -1,0 +1,62 @@
+# Komplettes Setup: App + Caddy (automatisches HTTPS) + tägliche Datenbank-Sicherung.
+# Vorbereitung: .env aus .env.example anlegen (DOMAIN, AUTOPOT_SECRET …), dann: docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      TRUST_PROXY: "1"            # Caddy terminiert HTTPS
+    volumes:
+      - autopot-data:/data
+    expose:
+      - "8080"
+    read_only: true               # Container-Dateisystem schreibgeschützt, nur /data ist beschreibbar
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 200
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  backup:
+    build: .
+    restart: unless-stopped
+    depends_on: [app]
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      BACKUP_KEEP: "30"
+    # Täglich sichern; der Ordner ./backups liegt auf dem Host (vorher: mkdir backups && sudo chown 1000:1000 backups)
+    entrypoint: ["sh", "-c", "while true; do node server/backup.js /backups && node server/restore.js --test \"$$(ls -1 /backups/autopot-*.sqlite | tail -n 1)\"; sleep 86400; done"]
+    volumes:
+      - autopot-data:/data
+      - ./backups:/backups
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  autopot-data:
+  caddy-data:
+  caddy-config:

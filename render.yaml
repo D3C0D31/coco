@@ -9,7 +9,7 @@ services:
       - key: TRUST_PROXY
         value: "1"           # Render terminiert HTTPS vor der App
       - key: REGISTRATION
-        value: open          # "closed" = keine neuen Konten
+        value: invite        # open | invite | closed
       - key: AUTOPOT_SECRET
         generateValue: true  # Pepper für den E-Mail-Blindindex – niemals ändern, sonst passen Logins nicht mehr
     disk:

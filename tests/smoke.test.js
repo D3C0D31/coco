@@ -116,7 +116,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   /* Backup mit Foto → alles löschen → Import stellt Foto wieder her */
   const bkPath = await viaData('#backupJson');
   const bj = JSON.parse(fs.readFileSync(bkPath, 'utf8'));
-  ok(bj.version === 5 && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v5, enthält das Foto');
+  ok(bj.version === 6 && bj.deleted && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v6 (mit Löschmarkern), enthält das Foto');
   await wipe();
   ok((await rowsCount()) === 1 && (await page.textContent('#logBody')).includes('Noch keine'), 'Foto: Speicher komplett geleert');
   await page.setInputFiles('#importFile', bkPath);

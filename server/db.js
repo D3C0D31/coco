@@ -57,6 +57,16 @@ function migrate(db) {
       CREATE INDEX IF NOT EXISTS sec_events_user ON sec_events(user_id, at);
       PRAGMA user_version = 2;`);
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 3) {
+    const u = cols('users');
+    if (!u.has('disabled')) db.exec('ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+    if (!u.has('last_login')) db.exec('ALTER TABLE users ADD COLUMN last_login INTEGER');
+    db.exec(`CREATE TABLE IF NOT EXISTS invites (
+      code_hash TEXT PRIMARY KEY, uses_left INTEGER NOT NULL, expires_at INTEGER, created_at INTEGER NOT NULL, note TEXT);
+      CREATE TABLE IF NOT EXISTS login_fails (
+      key TEXT PRIMARY KEY, n INTEGER NOT NULL, first INTEGER NOT NULL, until INTEGER NOT NULL);
+      PRAGMA user_version = 3;`);
+  }
 }
 
 /* Server-Geheimnis (Pepper für den E-Mail-Blindindex): Umgebungsvariable oder Datei mit 0600 */

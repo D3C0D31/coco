@@ -11,7 +11,7 @@ let srv, base;
 const H = { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' };
 
 async function start() {
-  srv = createServer({ dataDir: dir, registration: true, registerPerHour: 100, loginPer10Min: 200 });
+  srv = createServer({ dataDir: dir, registration: true, registerPerHour: 100, loginPer10Min: 200, powBits: 0 });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${srv.address().port}`;
 }
@@ -19,6 +19,7 @@ const stop = () => new Promise(r => srv.close(r));
 function client() {
   let cookie = '';
   const call = async (method, url, body, extra = {}) => {
+    if (url === '/api/register' && body && body.adult === undefined) body = Object.assign({ adult: true, terms: true }, body);
     const res = await fetch(base + url, { method, headers: Object.assign({}, H, cookie ? { Cookie: cookie } : {}, extra), body: body === undefined ? undefined : JSON.stringify(body) });
     const sc = res.headers.get('set-cookie');
     if (sc) cookie = /Max-Age=0/.test(sc) ? '' : sc.split(';')[0];
@@ -226,11 +227,11 @@ test('Geräte: Liste mit Bezeichnung, einzelne und alle anderen abmelden', async
 
 test('Sperre gilt pro Konto und IP – ein Angreifer sperrt dich nicht aus', async () => {
   const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'autopot-srv2-'));
-  const s2 = createServer({ dataDir: d2, trustProxy: true, loginPer10Min: 200 });
+  const s2 = createServer({ dataDir: d2, trustProxy: true, loginPer10Min: 200, powBits: 0 });
   await new Promise(r => s2.listen(0, '127.0.0.1', r));
   const b2 = `http://127.0.0.1:${s2.address().port}`;
   const call = (ip, body, url = '/api/login') => fetch(b2 + url, { method: 'POST', headers: Object.assign({ 'X-Forwarded-For': ip }, H), body: JSON.stringify(body) }).then(r => r.status);
-  assert.equal(await call('9.9.9.9', { email: 'gina@example.org', password: PW }, '/api/register'), 201);
+  assert.equal(await call('9.9.9.9', { email: 'gina@example.org', password: PW, adult: true, terms: true }, '/api/register'), 201);
   for (let i = 0; i < 8; i++) await call('6.6.6.6', { email: 'gina@example.org', password: 'falsch-falsch-' + i });
   assert.equal(await call('6.6.6.6', { email: 'gina@example.org', password: PW }), 429, 'Angreifer-IP gesperrt');
   assert.equal(await call('7.7.7.7', { email: 'gina@example.org', password: PW }), 200, 'Inhaberin von anderer IP weiter erlaubt');
@@ -262,4 +263,125 @@ test('Backup-Skript erzeugt geprüfte Sicherung', async () => {
   const files = fs.readdirSync(path.join(dir, 'backups'));
   assert.equal(files.length, 1);
   assert.equal(fs.statSync(path.join(dir, 'backups', files[0])).mode & 0o077, 0);
+});
+
+/* ---------- v7: Registrierungsschutz, Verwaltung, Betrieb ---------- */
+const { execFileSync } = require('child_process');
+const nodeArgs = ['--disable-warning=ExperimentalWarning'];
+const cli = (d, script, ...a) => execFileSync(process.execPath, [...nodeArgs, path.join(__dirname, '..', 'server', script), ...a], { env: Object.assign({}, process.env, { DATA_DIR: d }) }).toString();
+async function tempServer(opts) {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'autopot-v7-'));
+  const s = createServer(Object.assign({ dataDir: d, registerPerHour: 100, loginPer10Min: 200 }, opts));
+  await new Promise(r => s.listen(0, '127.0.0.1', r));
+  const b = `http://127.0.0.1:${s.address().port}`;
+  const call = async (method, url, body, extra = {}) => { const r = await fetch(b + url, { method, headers: Object.assign({}, H, extra), body: body === undefined ? undefined : JSON.stringify(body) }); let data = null; try { data = await r.json(); } catch (e) { /* ignore */ } return { status: r.status, data, headers: r.headers, text: null }; };
+  return { d, s, b, call, close: () => new Promise(r => s.close(r)), rm: () => fs.rmSync(d, { recursive: true, force: true }) };
+}
+const solvePow = (challenge, bits) => {
+  const cr = require('crypto');
+  for (let n = 0; ; n++) {
+    const h = cr.createHash('sha256').update(challenge + ':' + n).digest();
+    let z = 0; for (const x of h) { if (x === 0) { z += 8; continue; } z += Math.clz32(x) - 24; break; }
+    if (z >= bits) return String(n);
+  }
+};
+
+test('Bot-Schutz (Proof-of-Work), Altersbestätigung, Tageslimit, Höchstzahl', async () => {
+  const t = await tempServer({ powBits: 10, maxUsers: 2, regDailyMax: 5 });
+  const cfg = (await t.call('GET', '/api/config')).data;
+  assert.equal(cfg.mode, 'open'); assert.equal(cfg.pow, 10);
+  const base = { email: 'pow@example.org', password: PW, adult: true, terms: true };
+  assert.equal((await t.call('POST', '/api/register', base)).data.error, 'bad_challenge', 'ohne Lösung abgelehnt');
+  const ch = (await t.call('GET', '/api/challenge')).data;
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { challenge: ch.challenge, nonce: 'falsch' }))).data.error, 'bad_challenge');
+  const nonce = solvePow(ch.challenge, 10);
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { adult: false, challenge: ch.challenge, nonce }))).data.error, 'adult_required');
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { terms: false, challenge: ch.challenge, nonce }))).data.error, 'terms_required');
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { challenge: ch.challenge, nonce }))).status, 201);
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { email: 'pow2@example.org', challenge: ch.challenge, nonce }))).data.error, 'bad_challenge', 'Lösung nur einmal gültig');
+  const forged = ch.challenge.replace(/^\d+/, String(Date.now()));
+  assert.equal((await t.call('POST', '/api/register', Object.assign({}, base, { email: 'pow3@example.org', challenge: forged, nonce: solvePow(forged, 10) }))).data.error, 'bad_challenge', 'gefälschte Aufgabe abgelehnt');
+  const reg = async e => { const c = (await t.call('GET', '/api/challenge')).data.challenge; return t.call('POST', '/api/register', Object.assign({}, base, { email: e, challenge: c, nonce: solvePow(c, 10) })); };
+  assert.equal((await reg('two@example.org')).status, 201);
+  assert.equal((await reg('three@example.org')).data.error, 'full', 'Höchstzahl an Konten erreicht');
+  await t.close(); t.rm();
+});
+
+test('Einladungen: per Verwaltung erzeugt, einmal gültig, widerrufbar', async () => {
+  const t = await tempServer({ regMode: 'invite' });
+  assert.equal((await t.call('GET', '/api/config')).data.mode, 'invite');
+  const out = cli(t.d, 'admin.js', 'invite', 'create', '--uses', '1', '--days', '7', '--note', 'Test');
+  const code = /Einladungscode: ([0-9A-Z-]+)/.exec(out)[1];
+  const body = e => ({ email: e, password: PW, adult: true, terms: true });
+  assert.equal((await t.call('POST', '/api/register', body('i1@example.org'))).data.error, 'bad_invite');
+  assert.equal((await t.call('POST', '/api/register', Object.assign(body('i1@example.org'), { invite: code.toLowerCase().replace(/-/g, ' ') }))).status, 201, 'Code unabhängig von Schreibweise');
+  assert.equal((await t.call('POST', '/api/register', Object.assign(body('i2@example.org'), { invite: code }))).data.error, 'bad_invite', 'verbraucht');
+  const out2 = cli(t.d, 'admin.js', 'invite', 'create', '--uses', '5');
+  const code2 = /Einladungscode: ([0-9A-Z-]+)/.exec(out2)[1];
+  const id = cli(t.d, 'admin.js', 'invite', 'list').split('\n').find(l => / übrig: 5 /.test(l)).split(' ')[0];
+  assert.match(cli(t.d, 'admin.js', 'invite', 'revoke', id), /1 Einladung/);
+  assert.equal((await t.call('POST', '/api/register', Object.assign(body('i3@example.org'), { invite: code2 }))).data.error, 'bad_invite', 'widerrufen');
+  const db = new (require('node:sqlite').DatabaseSync)(path.join(t.d, 'autopot.sqlite'));
+  assert.ok(!db.prepare('SELECT code_hash FROM invites').all().some(r => r.code_hash.includes(code.replace(/-/g, ''))), 'Code nur als Hash gespeichert');
+  db.close();
+  await t.close(); t.rm();
+});
+
+test('Verwaltung: Statistik, Suche, Sperren, Löschen', async () => {
+  const t = await tempServer({ powBits: 0 });
+  let cookie = '';
+  const r = await fetch(t.b + '/api/register', { method: 'POST', headers: H, body: JSON.stringify({ email: 'adm@example.org', password: PW, adult: true, terms: true }) });
+  cookie = r.headers.get('set-cookie').split(';')[0];
+  const me = () => fetch(t.b + '/api/me', { headers: { Cookie: cookie } }).then(x => x.status);
+  assert.equal(await me(), 200);
+  assert.match(cli(t.d, 'admin.js', 'stats'), /Konten:\s+1/);
+  const id = /Nutzer-ID (\d+)/.exec(cli(t.d, 'admin.js', 'find', 'ADM@example.org'))[1];
+  assert.match(cli(t.d, 'admin.js', 'users'), /1 Konto/);
+  cli(t.d, 'admin.js', 'disable', id);
+  assert.equal(await me(), 401, 'gesperrtes Konto verliert die Sitzung');
+  assert.equal((await t.call('POST', '/api/login', { email: 'adm@example.org', password: PW })).data.error, 'disabled');
+  cli(t.d, 'admin.js', 'enable', id);
+  assert.equal((await t.call('POST', '/api/login', { email: 'adm@example.org', password: PW })).status, 200);
+  assert.match(cli(t.d, 'admin.js', 'delete', id, '--yes'), /gelöscht/);
+  assert.equal((await t.call('POST', '/api/login', { email: 'adm@example.org', password: PW })).status, 401);
+  await t.close(); t.rm();
+});
+
+test('Speicherkontingent, neuer Wiederherstellungscode, Sperre übersteht Neustart', async () => {
+  const t = await tempServer({ powBits: 0, userQuotaMB: 0.01 }); /* ca. 10 KB */
+  const r = await fetch(t.b + '/api/register', { method: 'POST', headers: H, body: JSON.stringify({ email: 'q@example.org', password: PW, adult: true, terms: true }) });
+  const ck = { Cookie: r.headers.get('set-cookie').split(';')[0] };
+  assert.equal((await t.call('PUT', '/api/state', { baseVersion: 0, data: { note: 'x'.repeat(5000) } }, ck)).status, 200);
+  assert.equal((await t.call('PUT', '/api/state', { baseVersion: 1, data: { note: 'x'.repeat(20000) } }, ck)).data.error, 'quota');
+  const me = (await t.call('GET', '/api/me', undefined, ck)).data;
+  assert.ok(me.usageBytes > 5000 && me.quotaBytes > 0);
+  assert.equal((await t.call('POST', '/api/recovery-code', { password: 'falsch-falsch-1' }, ck)).status, 401);
+  const rc = await t.call('POST', '/api/recovery-code', { password: PW }, ck);
+  assert.match(rc.data.recoveryCode, /^([0-9A-Z]{4}-){7}[0-9A-Z]{4}$/);
+  assert.equal((await t.call('POST', '/api/recover', { email: 'q@example.org', recoveryCode: rc.data.recoveryCode, newPassword: 'Anderes-Kennwort-55' })).status, 200);
+  for (let i = 0; i < 8; i++) await t.call('POST', '/api/login', { email: 'q@example.org', password: 'falsch-falsch-' + i });
+  await t.close();
+  const s2 = createServer({ dataDir: t.d, loginPer10Min: 200 });
+  await new Promise(res => s2.listen(0, '127.0.0.1', res));
+  const st = (await fetch(`http://127.0.0.1:${s2.address().port}/api/login`, { method: 'POST', headers: H, body: JSON.stringify({ email: 'q@example.org', password: 'Anderes-Kennwort-55' }) })).status;
+  assert.equal(st, 429, 'Sperre bleibt nach Neustart bestehen');
+  const raw = fs.readFileSync(path.join(t.d, 'autopot.sqlite'));
+  assert.ok(!raw.includes('127.0.0.1') && !raw.includes('::ffff'), 'keine IP-Adressen in der Datenbank');
+  await new Promise(res => s2.close(res)); t.rm();
+});
+
+test('Betrieb: Health, Metriken mit Token, Wiederherstellungsprobe', async () => {
+  const t = await tempServer({ powBits: 0, metricsToken: 'geheimes-metrik-token' });
+  const h = await t.call('GET', '/api/health');
+  assert.equal(h.status, 200); assert.equal(h.data.ok, true);
+  assert.equal((await fetch(t.b + '/api/metrics')).status, 404, 'ohne Token unsichtbar');
+  assert.equal((await fetch(t.b + '/api/metrics', { headers: { Authorization: 'Bearer falsch' } })).status, 404);
+  await t.call('POST', '/api/register', { email: 'm@example.org', password: PW, adult: true, terms: true });
+  const m = await (await fetch(t.b + '/api/metrics', { headers: { Authorization: 'Bearer geheimes-metrik-token' } })).text();
+  assert.match(m, /autopot_users 1/); assert.match(m, /autopot_registrations_total 1/); assert.match(m, /autopot_requests_total\{class="2xx"\} \d+/);
+  await t.close();
+  assert.match(cli(t.d, 'backup.js'), /Sicherung erstellt/);
+  assert.match(cli(t.d, 'restore.js', '--test'), /Probe erfolgreich: .*1 Konten erreichbar/);
+  assert.throws(() => cli(t.d, 'restore.js', fs.readdirSync(path.join(t.d, 'backups')).map(f => path.join(t.d, 'backups', f))[0]), /mit --yes bestätigen|Command failed/);
+  t.rm();
 });

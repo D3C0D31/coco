@@ -4,3 +4,5 @@ server-data
 tests
 data
 *.zip
+backups
+.env

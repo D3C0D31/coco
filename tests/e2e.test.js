@@ -44,7 +44,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   await a.goto(base + '/app.html?mode=register');
   await a.waitForSelector('#accountDlg[open]');
   await a.fill('#reEmail', EMAIL); await a.fill('#rePw', PW); await a.fill('#rePw2', PW + 'x');
-  await a.check('#registerForm [name=consent]');
+  await a.check('#registerForm [name=adult]'); await a.check('#registerForm [name=terms]');
   await a.click('#registerForm button[type=submit]');
   ok((await a.textContent('#acctMsg')).includes('stimmen nicht überein'), 'Registrierung: ungleiche Passwörter werden abgelehnt');
   await a.fill('#rePw2', PW);
@@ -92,6 +92,15 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   await b.fill('#fNote', 'B-parallel'); await b.fill('#fEc', '1.2'); await b.click('#saveEntry');
   ok(await waitFor(async () => { const n = (await serverHas()).notes; return n.includes('A-offline') && n.includes('B-parallel'); }, 15000), 'Parallele Änderungen beider Geräte werden zusammengeführt');
 
+  /* ---------- Löschen wird synchronisiert (Löschmarker) ---------- */
+  const rowB = a.locator('#logBody tr', { hasText: 'Von-Gerät-B' });
+  await rowB.locator('[data-act="del-entry"]').click();
+  ok(await waitFor(async () => !(await serverHas()).notes.includes('Von-Gerät-B')), 'Löschen auf Gerät A erreicht die Cloud');
+  await b.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  ok(await waitFor(async () => !(await b.textContent('#logBody')).includes('Von-Gerät-B')), 'Gerät B übernimmt die Löschung (Eintrag kehrt nicht zurück)');
+  await b.fill('#fNote', 'B-nach-Löschung'); await b.fill('#fEc', '1.3'); await b.click('#saveEntry');
+  ok(await waitFor(async () => { const n = (await serverHas()).notes; return n.includes('B-nach-Löschung') && !n.includes('Von-Gerät-B'); }), 'Neue Änderung von B bringt den gelöschten Eintrag nicht zurück');
+
   /* ---------- Geräte und Sicherheitsprotokoll ---------- */
   await a.click('#accountBtn'); await a.click('#acctIn summary:has-text("Angemeldete Geräte")');
   ok(await waitFor(async () => (await a.locator('#sessList .item').count()) === 2), 'Geräte: beide Geräte werden angezeigt');
@@ -137,7 +146,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok((await d.textContent('[data-pwmeter="rePw"]')).includes('schwach'), 'Passwortstärke-Anzeige: schwaches Passwort erkannt');
   await d.fill('#rePw', 'Sicheres-Kennwort-2026!'); await d.fill('#rePw2', 'Sicheres-Kennwort-2026!');
   ok(/gut|stark/.test(await d.textContent('[data-pwmeter="rePw"]')), 'Passwortstärke-Anzeige: starkes Passwort erkannt');
-  await d.check('#registerForm [name=consent]'); await d.click('#registerForm button[type=submit]');
+  await d.check('#registerForm [name=adult]'); await d.check('#registerForm [name=terms]'); await d.click('#registerForm button[type=submit]');
   await d.waitForSelector('#acctRecovery:not(.hidden)'); await d.check('#recoveryOk'); await d.click('#recoveryDone');
   await d.click('#accountBtn'); await d.click('#tfaBox summary'); await d.click('#tfaStart');
   await d.waitForSelector('#tfaQr svg');
@@ -163,6 +172,19 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => d.evaluate(async () => (await (await fetch('/api/session')).json()).authenticated)), '2FA: Login mit neuem Code erfolgreich');
   await D.ctx.close();
 
+  /* Einladungsmodus: Feld für den Code erscheint */
+  const inv = createServer({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'autopot-e2e3-')), regMode: 'invite' });
+  await new Promise(r => inv.listen(0, '127.0.0.1', r));
+  const E = await device();
+  await E.page.goto(`http://127.0.0.1:${inv.address().port}/app.html?mode=register`);
+  await E.page.waitForSelector('#accountDlg[open]');
+  ok(await E.page.locator('#reInvite').isVisible(), 'Einladungsmodus: Feld für den Einladungscode sichtbar');
+  await E.page.fill('#reEmail', 'x@example.org'); await E.page.fill('#rePw', 'Sicheres-Kennwort-2026!'); await E.page.fill('#rePw2', 'Sicheres-Kennwort-2026!');
+  await E.page.fill('#reInvite', 'AAAA-BBBB-CCCC'); await E.page.check('#registerForm [name=adult]'); await E.page.check('#registerForm [name=terms]');
+  await E.page.click('#registerForm button[type=submit]');
+  ok(await waitFor(async () => (await E.page.textContent('#acctMsg')).includes('Einladungscode ist ungültig')), 'Einladungsmodus: falscher Code abgelehnt');
+  await E.ctx.close(); inv.close();
+
   /* Registrierung geschlossen */
   await A.ctx.close(); await B.ctx.close();
   srv.close();
@@ -173,7 +195,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => !(await C.page.locator('a[data-needs-reg]').first().isVisible())), 'Geschlossene Registrierung: Knöpfe auf der Landingpage verschwinden');
   closed.close();
 
-  const real = errors.filter(e => !/401|409|429/.test(e));
+  const real = errors.filter(e => !/401|403|409|429/.test(e)); /* erwartete Ablehnungen aus den Tests */
   ok(real.length === 0, 'Keine JS-/Konsolenfehler' + (real.length ? ': ' + real.slice(0, 4).join(' | ') : ''));
   await browser.close();
   fs.rmSync(dir, { recursive: true, force: true });

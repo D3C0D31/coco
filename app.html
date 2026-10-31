@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
 <header class="topbar no-print">
   <div class="topbar-in">
     <h1 class="brand"><span class="logo" aria-hidden="true">🌱</span><span>AutoPot Grow</span></h1>
@@ -31,7 +32,7 @@
   </nav>
 </header>
 
-<main>
+<main id="main" tabindex="-1">
 <section id="dashboard" class="plain">
   <div class="hero">
     <div>
@@ -372,7 +373,9 @@
         <div><label for="reEmail">E-Mail</label><input id="reEmail" name="email" type="email" autocomplete="username" required maxlength="254"></div>
         <div><label for="rePw">Passwort (mind. 10 Zeichen)</label><input id="rePw" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="200"><div class="pwm" data-pwmeter="rePw"><i></i><span></span></div></div>
         <div><label for="rePw2">Passwort wiederholen</label><input id="rePw2" name="password2" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
-        <label class="check"><input name="consent" type="checkbox" required><span>Ich habe die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
+        <div id="reInviteWrap" class="hidden"><label for="reInvite">Einladungscode</label><input id="reInvite" name="invite" type="text" autocomplete="off" spellcheck="false" maxlength="40" placeholder="XXXX-XXXX-XXXX"></div>
+        <label class="check"><input name="adult" type="checkbox" required><span>Ich bin mindestens 18 Jahre alt.</span></label>
+        <label class="check"><input name="terms" type="checkbox" required><span>Ich akzeptiere die <a href="nutzungsbedingungen.html" target="_blank" rel="noopener">Nutzungsbedingungen</a> und habe die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
         <button class="btn primary block" type="submit">Konto erstellen</button>
         <small class="hint">Du bekommst danach einen Wiederherstellungscode. Ohne ihn sind deine Daten nach einem vergessenen Passwort nicht mehr lesbar.</small>
       </form>
@@ -394,7 +397,8 @@
     </div>
     <div id="acctIn" class="hidden">
       <p class="sub" style="margin:0"><i class="sync-dot off" aria-hidden="true"></i> <span id="syncText"></span></p>
-      <p class="sub" id="acctSince" style="margin:0 0 4px"></p>
+      <p class="sub" id="acctSince" style="margin:0"></p>
+      <p class="sub" id="acctUsage" style="margin:0 0 4px"></p>
       <button class="btn block" id="syncNow" type="button">🔄 Jetzt synchronisieren</button>
       <button class="btn block" id="cloudExport" type="button">📦 Alle Cloud-Daten exportieren</button>
       <details class="acct-det" id="tfaBox"><summary>🔐 Zwei-Faktor-Anmeldung</summary>
@@ -427,6 +431,14 @@
       </details>
       <details class="acct-det"><summary>📜 Sicherheitsprotokoll</summary>
         <div id="secLog" class="seclog"></div>
+      </details>
+      <details class="acct-det"><summary>🧾 Neuen Wiederherstellungscode erzeugen</summary>
+        <form id="rcForm" class="acct-form">
+          <p class="sub" style="margin:0">Code verlegt? Hier bekommst du einen neuen. Der alte wird sofort ungültig.</p>
+          <input name="u" type="text" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
+          <div><label for="rcPwd">Passwort zur Bestätigung</label><input id="rcPwd" name="password" type="password" autocomplete="current-password" required maxlength="200"></div>
+          <button class="btn primary" type="submit">Neuen Code erzeugen</button>
+        </form>
       </details>
       <details class="acct-det"><summary>Passwort ändern</summary>
         <form id="pwForm" class="acct-form">

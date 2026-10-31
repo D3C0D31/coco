@@ -80,12 +80,13 @@ function normPhase(p) {
 
 /* ---------- Datenmodell (Schema v5) ---------- */
 const blank = () => ({
-  version: 5,
+  version: 6,
   settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, flowerStart: null, flowerWeeks: 9, lightHours: 18, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
   entries: [], recipes: [], events: [], reminders: [],
   checks: { setup: {}, week: {} },
   harvest: { date: '', wet: null, dry: null, watt: null, note: '' },
-  archive: []
+  archive: [],
+  deleted: { entries: {}, recipes: {}, events: {}, reminders: {}, archive: {} } /* Löschmarker für die Synchronisation */
 });
 
 function normEntry(e) {
@@ -143,8 +144,15 @@ function normalize(d) {
     id: String(a.id || uid()).slice(0, 40), name: String(a.name ?? 'Grow').slice(0, 60), start: dstr(a.start), end: dstr(a.end),
     entries: Math.max(0, Math.round(num(a.entries) ?? 0)), days: num(a.days), wet: num(a.wet), dry: num(a.dry), watt: num(a.watt), avgEc: num(a.avgEc), avgPh: num(a.avgPh)
   }));
+  /* Löschmarker: id -> Zeitpunkt; nach 180 Tagen verworfen */
+  const del = d.deleted && typeof d.deleted === 'object' ? d.deleted : {}, cut = Date.now() - 180 * 864e5;
+  Object.keys(out.deleted).forEach(k => {
+    const src = del[k] && typeof del[k] === 'object' ? del[k] : {};
+    Object.keys(src).slice(0, 5000).forEach(id => { const t = Number(src[id]); if (t > cut && id.length <= 40) out.deleted[k][id] = t; });
+  });
   return out;
 }
+const markDeleted = (kind, ids) => { const now = Date.now(); [].concat(ids).forEach(id => { S.deleted[kind][id] = now; }); };
 
 const entryKey = e => [e.date, e.phase, e.ec, e.ph, e.airTemp, e.humidity, e.waterTemp].join('|');
 function mergeEntries(base, extra) {
@@ -425,7 +433,7 @@ function renderLog() {
   if (!es.length) { body.innerHTML = `<tr><td colspan="14">${S.entries.length ? 'Keine Treffer für diesen Filter.' : 'Noch keine Einträge.'}</td></tr>`; return; }
   body.innerHTML = es.map(e => {
     const v = vpdOf(e), photo = photoCache.get(e.id);
-    return `<tr><td class="num">${esc(fmtDate(e.date))}</td><td>${esc(e.phase || '–')}</td><td class="num">${nf(e.ec)}</td><td class="num">${fmtPh(e.ph)}</td><td class="num">${nf(e.waterTemp, 1)}</td><td class="num">${nf(e.airTemp, 1)}</td><td class="num">${nf(e.humidity, 0)}</td><td class="num">${nf(v)}</td><td class="num">${nf(e.ppfd, 0)}</td><td class="num">${nf(e.use, 1)}</td><td class="num">${nf(e.height, 1)}</td><td>${e.tags ? `<em>${esc(e.tags)}</em><br>` : ''}${esc(e.note)}</td><td>${photo ? `<img class="thumb" data-act="lightbox" data-id="${esc(e.id)}" src="${photo}" alt="Foto vom ${esc(fmtDate(e.date))}">` : ''}</td><td class="num"><button class="btn small" data-act="edit" data-id="${esc(e.id)}" type="button">✎</button> <button class="btn small danger" data-act="del-entry" data-id="${esc(e.id)}" type="button" aria-label="Eintrag löschen">✕</button></td></tr>`;
+    return `<tr><td class="num">${esc(fmtDate(e.date))}</td><td>${esc(e.phase || '–')}</td><td class="num">${nf(e.ec)}</td><td class="num">${fmtPh(e.ph)}</td><td class="num">${nf(e.waterTemp, 1)}</td><td class="num">${nf(e.airTemp, 1)}</td><td class="num">${nf(e.humidity, 0)}</td><td class="num">${nf(v)}</td><td class="num">${nf(e.ppfd, 0)}</td><td class="num">${nf(e.use, 1)}</td><td class="num">${nf(e.height, 1)}</td><td>${e.tags ? `<em>${esc(e.tags)}</em><br>` : ''}${esc(e.note)}</td><td>${photo ? `<img class="thumb" data-act="lightbox" data-id="${esc(e.id)}" src="${photo}" alt="Foto vom ${esc(fmtDate(e.date))}">` : ''}</td><td class="num"><button class="btn small" data-act="edit" data-id="${esc(e.id)}" type="button" aria-label="Eintrag bearbeiten">✎</button> <button class="btn small danger" data-act="del-entry" data-id="${esc(e.id)}" type="button" aria-label="Eintrag löschen">✕</button></td></tr>`;
   }).join('');
 }
 function renderGallery() {
@@ -980,6 +988,7 @@ function newGrow() {
     (JSON.parse(localStorage.getItem(KEY + '-prev')).entries || []).forEach(e => { if (e.hasPhoto) keep.add(e.id); });
   } catch (e) { /* ignore */ }
   S.archive.unshift(item);
+  markDeleted('entries', S.entries.map(e => e.id)); markDeleted('events', S.events.map(e => e.id));
   S.entries = []; S.events = []; S.harvest = blank().harvest; S.checks.week = {};
   Object.assign(S.settings, { startDate: null, phaseStart: null, flowerStart: null, lastTankChange: null, phase: PHASES[0], lightHours: 18, tankRest: S.settings.tankSize });
   [...photoCache.keys()].forEach(id => { if (!keep.has(id)) dropPhoto(id); });
@@ -1020,7 +1029,7 @@ function updateNav() {
   navRaf = 0;
   let cur = SECTIONS[0];
   SECTIONS.forEach(id => { if ($(id).getBoundingClientRect().top <= 150) cur = id; });
-  document.querySelectorAll('nav.tabs a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  document.querySelectorAll('nav.tabs a').forEach(a => { const on = a.getAttribute('href') === '#' + cur; a.classList.toggle('active', on); if (on) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current'); });
   const main4 = ['dashboard', 'log', 'charts', 'calc'];
   document.querySelectorAll('.bottomnav [data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === cur));
   $('moreBtn').classList.toggle('on', !main4.includes(cur));
@@ -1217,6 +1226,11 @@ function mergeStates(preferred, other) {
     o[k].forEach(x => { if (!have.has(x.id)) out[k].push(x); });
   });
   ['setup', 'week'].forEach(k => Object.keys(o.checks[k]).forEach(i => { out.checks[k][i] = true; }));
+  /* Löschungen beider Seiten zusammenführen und anwenden – so tauchen gelöschte Einträge nicht wieder auf */
+  Object.keys(out.deleted).forEach(k => {
+    Object.entries(o.deleted[k]).forEach(([id, t]) => { if (!(out.deleted[k][id] >= t)) out.deleted[k][id] = t; });
+    out[k] = out[k].filter(x => !out.deleted[k][x.id]);
+  });
   return out;
 }
 const hasLocalData = () => S.entries.length || S.recipes.length || S.events.length || S.settings.name || S.archive.length;
@@ -1342,7 +1356,7 @@ async function cloudInit() {
   if (navigator.onLine === false) { window.addEventListener('online', () => cloudInit(), { once: true }); return; }
   const cfg = await cloudApi('GET', '/api/config');
   if (!cfg.ok || !cfg.data || typeof cfg.data.registration !== 'boolean') return;
-  CLOUD.available = true; CLOUD.registration = cfg.data.registration;
+  CLOUD.available = true; CLOUD.registration = cfg.data.registration; CLOUD.mode = cfg.data.mode || (cfg.data.registration ? 'open' : 'closed'); CLOUD.pow = Number(cfg.data.pow) || 0;
   $('accountBtn').classList.remove('hidden');
   const me = await cloudApi('GET', '/api/session');
   if (me.ok && me.data.authenticated) {
@@ -1372,6 +1386,7 @@ function renderAccount() {
   $('acctIn').classList.toggle('hidden', !CLOUD.user);
   const regTab = document.querySelector('#acctTabs [data-tab="register"]');
   if (regTab) regTab.classList.toggle('hidden', CLOUD.registration === false);
+  $('reInviteWrap').classList.toggle('hidden', CLOUD.mode !== 'invite'); $('reInvite').required = CLOUD.mode === 'invite';
   $('acctSince').textContent = CLOUD.user ? `Konto seit ${new Date(CLOUD.user.createdAt).toLocaleDateString('de-DE')}` : '';
   setSyncStatus(CLOUD.status);
 }
@@ -1382,18 +1397,42 @@ function showRecovery(code) {
   openDlg('accountDlg');
 }
 const formVals = f => Object.fromEntries([...f.elements].filter(e => e.name).map(e => [e.name, e.type === 'checkbox' ? e.checked : e.value]));
+function solvePow(challenge, bits) {
+  return new Promise(res => {
+    let w;
+    try { w = new Worker('pow-worker.js'); } catch (e) { res(null); return; }
+    const t = setTimeout(() => { w.terminate(); res(null); }, 60000);
+    w.onmessage = ev => { clearTimeout(t); w.terminate(); res(ev.data && ev.data.nonce); };
+    w.onerror = () => { clearTimeout(t); w.terminate(); res(null); };
+    w.postMessage({ challenge, bits });
+  });
+}
 async function submitAuth(kind, f) {
   const v = formVals(f), btn = f.querySelector('button[type=submit]');
   btn.disabled = true; setAcctMsg('Bitte warten …');
   try {
     if (kind === 'register') {
       if (v.password !== v.password2) { setAcctMsg('Die Passwörter stimmen nicht überein.', true); return; }
-      if (!v.consent) { setAcctMsg('Bitte der Datenschutzerklärung zustimmen.', true); return; }
+      if (!v.adult) { setAcctMsg('Die Nutzung ist erst ab 18 Jahren erlaubt.', true); return; }
+      if (!v.terms) { setAcctMsg('Bitte den Nutzungsbedingungen und der Datenschutzerklärung zustimmen.', true); return; }
     }
     const url = { login: '/api/login', register: '/api/register', recover: '/api/recover' }[kind];
     if (kind === 'register' && pwScore(v.password) < 2) { setAcctMsg('Bitte ein stärkeres Passwort wählen (länger, mit Zahlen oder Sonderzeichen).', true); return; }
     const body = kind === 'recover' ? { email: v.email, recoveryCode: v.recoveryCode, newPassword: v.newPassword } : { email: v.email, password: v.password };
     if (kind === 'login' && v.totp) body.totp = v.totp.replace(/\s+/g, '');
+    if (kind === 'register') {
+      Object.assign(body, { adult: true, terms: true });
+      if (CLOUD.mode === 'invite') body.invite = v.invite;
+      else if (CLOUD.pow > 0) {
+        setAcctMsg('Kurze Sicherheitsprüfung gegen Bots läuft …');
+        const ch = await cloudApi('GET', '/api/challenge');
+        if (!ch.ok) { setAcctMsg((ch.data && ch.data.message) || 'Sicherheitsprüfung nicht möglich.', true); return; }
+        const nonce = await solvePow(ch.data.challenge, ch.data.bits);
+        if (nonce == null) { setAcctMsg('Sicherheitsprüfung fehlgeschlagen. Bitte erneut versuchen.', true); return; }
+        Object.assign(body, { challenge: ch.data.challenge, nonce });
+        setAcctMsg('Konto wird angelegt …');
+      }
+    }
     const r = await cloudApi('POST', url, body);
     if (r.status === 0) { setAcctMsg('Der Server ist nicht erreichbar.', true); return; }
     if (kind === 'login' && r.data && (r.data.error === 'totp_required' || r.data.error === 'bad_totp')) {
@@ -1456,7 +1495,7 @@ function bindAccount() {
 }
 
 /* ---------- Sicherheit im Konto-Dialog: 2FA, Geräte, Protokoll ---------- */
-const EVENT_LABELS = { register: 'Konto erstellt', login: 'Anmeldung', login_failed: 'Fehlgeschlagene Anmeldung', totp_failed: 'Falscher Zwei-Faktor-Code', recovery_used: 'Passwort per Wiederherstellungscode zurückgesetzt', password_changed: 'Passwort geändert', '2fa_enabled': 'Zwei-Faktor-Anmeldung aktiviert', '2fa_disabled': 'Zwei-Faktor-Anmeldung deaktiviert', session_revoked: 'Ein Gerät abgemeldet', sessions_revoked: 'Alle anderen Geräte abgemeldet', export: 'Alle Daten exportiert' };
+const EVENT_LABELS = { register: 'Konto erstellt', login: 'Anmeldung', login_failed: 'Fehlgeschlagene Anmeldung', totp_failed: 'Falscher Zwei-Faktor-Code', recovery_used: 'Passwort per Wiederherstellungscode zurückgesetzt', recovery_regenerated: 'Neuer Wiederherstellungscode erzeugt', admin_disabled: 'Konto vom Betreiber gesperrt', admin_enabled: 'Konto vom Betreiber entsperrt', password_changed: 'Passwort geändert', '2fa_enabled': 'Zwei-Faktor-Anmeldung aktiviert', '2fa_disabled': 'Zwei-Faktor-Anmeldung deaktiviert', session_revoked: 'Ein Gerät abgemeldet', sessions_revoked: 'Alle anderen Geräte abgemeldet', export: 'Alle Daten exportiert' };
 const BAD_EVENTS = new Set(['login_failed', 'totp_failed']);
 const fmtDT = t => new Date(t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
 async function renderSecurity() {
@@ -1464,6 +1503,7 @@ async function renderSecurity() {
   const [me, ss, lg] = await Promise.all([cloudApi('GET', '/api/me'), cloudApi('GET', '/api/sessions'), cloudApi('GET', '/api/security-log')]);
   if (me.ok) {
     CLOUD.totp = !!me.data.totp;
+    if (me.data.quotaBytes) { const mb = b => (b / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 }); $('acctUsage').textContent = `Speicher: ${mb(me.data.usageBytes)} MB von ${mb(me.data.quotaBytes)} MB belegt (${me.data.photos} Fotos)`; }
     $('tfaState').innerHTML = CLOUD.totp ? '<span class="chip ok">aktiv</span> Beim Anmelden wird zusätzlich ein Code aus deiner Authenticator-App abgefragt.' : '<span class="chip warn">aus</span> Empfohlen: Schützt dein Konto auch dann, wenn jemand dein Passwort kennt.';
     $('tfaStart').classList.toggle('hidden', CLOUD.totp || !$('tfaSetup').classList.contains('hidden'));
     $('tfaOffForm').classList.toggle('hidden', !CLOUD.totp);
@@ -1513,6 +1553,12 @@ function bindSecurity() {
     const r = await cloudApi('DELETE', '/api/sessions/' + b.dataset.sess);
     toast(r.ok ? 'Gerät abgemeldet.' : 'Abmelden fehlgeschlagen.', !r.ok); renderSecurity();
   });
+  $('rcForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const r = await cloudApi('POST', '/api/recovery-code', { password: $('rcPwd').value });
+    if (!r.ok) { toast((r.data && r.data.message) || 'Das hat nicht geklappt.', true); return; }
+    $('rcForm').reset(); toast('Neuer Wiederherstellungscode erzeugt – der alte ist ab sofort ungültig.'); showRecovery(r.data.recoveryCode);
+  });
   $('sessOthers').addEventListener('click', async () => {
     const r = await cloudApi('DELETE', '/api/sessions/others');
     toast(r.ok ? `${r.data.removed} Gerät(e) abgemeldet.` : 'Abmelden fehlgeschlagen.', !r.ok); renderSecurity();
@@ -1538,21 +1584,21 @@ document.addEventListener('click', ev => {
       const removed = S.entries.find(e => e.id === id);
       if (!removed) break;
       const photo = photoCache.get(id);
-      S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id);
+      S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id); markDeleted('entries', id);
       if (editingId === id) resetForm();
       save(); renderAll();
       toast(`Eintrag vom ${fmtDate(removed.date)} gelöscht.`, false, { label: 'Rückgängig', fn: async () => {
         if (S.entries.some(e => e.id === id)) return;
-        S.entries.push(removed);
+        S.entries.push(removed); delete S.deleted.entries[id];
         if (photo) { photoCache.set(id, photo); if (idb) { try { await idbRun('readwrite', st => st.put(photo, id)); } catch (e) { /* nur im Speicher */ } } }
         save(); renderAll(); toast('Eintrag wiederhergestellt.');
       } });
       break;
     }
-    case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); save(); renderLists(); break;
-    case 'del-event': S.events = S.events.filter(r => r.id !== id); save(); renderLists(); break;
-    case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); save(); renderArchive(); break;
-    case 'del-rem': S.reminders = S.reminders.filter(r => r.id !== id); save(); renderReminders(); break;
+    case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); markDeleted('recipes', id); save(); renderLists(); break;
+    case 'del-event': S.events = S.events.filter(r => r.id !== id); markDeleted('events', id); save(); renderLists(); break;
+    case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); markDeleted('archive', id); save(); renderArchive(); break;
+    case 'del-rem': S.reminders = S.reminders.filter(r => r.id !== id); markDeleted('reminders', id); save(); renderReminders(); break;
     case 'rem-done': {
       const r = S.reminders.find(x => x.id === id);
       if (r) { r.lastDone = remInfo(r).done ? null : new Date().toISOString(); save(); renderReminders(); }

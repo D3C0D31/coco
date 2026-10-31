@@ -85,4 +85,8 @@ async function rewrap(dek, password) {
 /* Blindindex für die E-Mail: Klartext-Adressen liegen nie in der Datenbank */
 const emailHash = (pepper, email) => hmac(pepper, 'email:' + String(email).trim().toLowerCase());
 
-module.exports = { scrypt, seal, open, rand, sha256, sessionKey, createAccount, unlock, unlockWithRecovery, rewrap, emailHash, safeEq, normRecovery, newRecoveryCode };
+/* Einladungscodes: 60 Bit, Crockford-Base32, nur als Hash gespeichert */
+const newInviteCode = () => b32(rand(8)).slice(0, 12).match(/.{4}/g).join('-');
+const inviteHash = code => sha256('invite:' + normRecovery(code)).toString('hex');
+
+module.exports = { newInviteCode, inviteHash, scrypt, seal, open, rand, sha256, sessionKey, createAccount, unlock, unlockWithRecovery, rewrap, emailHash, safeEq, normRecovery, newRecoveryCode };

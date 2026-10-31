@@ -14,13 +14,20 @@ const CFG = {
   port: Number(process.env.PORT || 8080),
   host: process.env.HOST || '0.0.0.0',
   dataDir: process.env.DATA_DIR || path.join(ROOT, 'server-data'),
-  registration: (process.env.REGISTRATION || 'open') !== 'closed',
+  regMode: ['open', 'invite', 'closed'].includes(process.env.REGISTRATION) ? process.env.REGISTRATION : 'open', /* open | invite | closed */
+  powBits: Number(process.env.POW_BITS ?? 16),          /* Rechenaufgabe gegen Bots bei offener Registrierung (0 = aus) */
+  maxUsers: Number(process.env.MAX_USERS || 0),           /* 0 = unbegrenzt */
+  regDailyMax: Number(process.env.REG_DAILY_MAX || 50),   /* neue Konten pro 24 h insgesamt */
+  userQuotaMB: Number(process.env.USER_QUOTA_MB || 200),  /* Speicher pro Konto */
+  metricsToken: process.env.METRICS_TOKEN || '',          /* aktiviert /api/metrics (Bearer-Token) */
+  accessLog: false,
   trustProxy: process.env.TRUST_PROXY === '1',
+  ipHeader: (process.env.CLIENT_IP_HEADER || '').toLowerCase(),
   sessionDays: Number(process.env.SESSION_DAYS || 30),     /* gleitend: verlängert sich bei Nutzung */
   sessionMaxDays: Number(process.env.SESSION_MAX_DAYS || 90), /* absolut: danach immer neu anmelden */
   apiPerMinute: Number(process.env.API_RATE_PER_MIN || 300),
-  registerPerHour: 5,     /* pro IP */
-  loginPer10Min: 20,      /* pro IP */
+  registerPerHour: Number(process.env.REG_PER_HOUR || 5),     /* pro IP */
+  loginPer10Min: Number(process.env.LOGIN_PER_10MIN || 20),   /* pro IP */
   kdfConcurrency: Number(process.env.KDF_CONCURRENCY || 4),
   kdfQueue: 64,
   maxPhotosPerUser: 800,
@@ -32,6 +39,8 @@ const DAY = 864e5;
 
 function createServer(overrides = {}) {
   const cfg = Object.assign({}, CFG, overrides);
+  if (typeof overrides.registration === 'boolean' && !overrides.regMode) cfg.regMode = overrides.registration ? 'open' : 'closed';
+  cfg.registration = cfg.regMode !== 'closed';
   const db = openDb(cfg.dataDir);
   const pepper = loadPepper(cfg.dataDir);
   const q = {
@@ -61,35 +70,49 @@ function createServer(overrides = {}) {
     allPhotos: db.prepare('SELECT id, blob FROM photos WHERE user_id=?'),
     addEvent: db.prepare('INSERT INTO sec_events (user_id, type, at) VALUES (?,?,?)'),
     listEvents: db.prepare('SELECT type, at FROM sec_events WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?'),
+    countUsers: db.prepare('SELECT COUNT(*) AS n FROM users'),
+    countNewUsers: db.prepare('SELECT COUNT(*) AS n FROM users WHERE created_at > ?'),
+    countSessions: db.prepare('SELECT COUNT(*) AS n FROM sessions'),
+    setLastLogin: db.prepare('UPDATE users SET last_login=? WHERE id=?'),
+    usage: db.prepare('SELECT (SELECT COALESCE(SUM(length(blob)),0) FROM docs WHERE user_id=?) + (SELECT COALESCE(SUM(length(blob)),0) FROM photos WHERE user_id=?) AS b'),
+    docLen: db.prepare('SELECT COALESCE(length(blob),0) AS b FROM docs WHERE user_id=? AND kind=?'),
+    photoLen: db.prepare('SELECT COALESCE(length(blob),0) AS b FROM photos WHERE user_id=? AND id=?'),
+    useInvite: db.prepare('UPDATE invites SET uses_left = uses_left - 1 WHERE code_hash=? AND uses_left > 0 AND (expires_at IS NULL OR expires_at > ?)'),
+    refundInvite: db.prepare('UPDATE invites SET uses_left = uses_left + 1 WHERE code_hash=?'),
+    getFail: db.prepare('SELECT * FROM login_fails WHERE key=?'),
+    putFail: db.prepare('INSERT OR REPLACE INTO login_fails (key, n, first, until) VALUES (?,?,?,?)'),
+    delFail: db.prepare('DELETE FROM login_fails WHERE key=?'),
+    purgeFails: db.prepare('DELETE FROM login_fails WHERE until < ? AND first < ?'),
     trimEvents: db.prepare('DELETE FROM sec_events WHERE user_id = ? AND id NOT IN (SELECT id FROM sec_events WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?)')
   };
   const logEvent = (userId, type) => { try { const now = Date.now(); q.addEvent.run(userId, type, now); q.trimEvents.run(userId, userId, cfg.logLimit); } catch (e) { /* Protokoll darf nie den Ablauf stören */ } };
 
   /* ---------- Begrenzungen (im Speicher) ---------- */
   const hits = new Map();   /* Schlüssel -> Zeitstempel */
-  const fails = new Map();  /* Schlüssel -> {n, first, until} */
+  /* Fehlversuche/Sperren liegen in der Datenbank (überstehen Neustarts); Schlüssel nur als HMAC – keine IP-Adressen im Klartext */
+  const fkey = k => crypto.createHmac('sha256', pepper).update('fail:' + k).digest('hex').slice(0, 40);
   const rateOk = (key, max, windowMs) => {
     const now = Date.now(), arr = (hits.get(key) || []).filter(t => now - t < windowMs);
     if (arr.length >= max) { hits.set(key, arr); return false; }
     arr.push(now); hits.set(key, arr);
     return true;
   };
-  const locked = key => { const f = fails.get(key); return !!(f && f.until > Date.now()); };
+  const locked = key => { const f = q.getFail.get(fkey(key)); return !!(f && f.until > Date.now()); };
   /* Fehlversuch zählen: nach `max` Fehlern im Fenster wird der Schlüssel 15 min gesperrt */
   const failed = (key, max, windowMs = 3600e3) => {
     const now = Date.now();
-    let f = fails.get(key);
-    if (!f || now - f.first > windowMs) f = { n: 0, first: now, until: 0 };
+    const k = fkey(key), row = q.getFail.get(k);
+    const f = !row || now - row.first > windowMs ? { n: 0, first: now, until: row ? row.until : 0 } : { n: row.n, first: row.first, until: row.until };
     f.n++;
     if (f.n >= max) { f.until = now + 15 * 60e3; f.n = 0; f.first = now; }
-    fails.set(key, f);
+    q.putFail.run(k, f.n, f.first, f.until);
   };
   /* Sperre pro (Konto + IP) – und zusätzlich pro Konto mit höherer Schwelle.
      So kann ein Angreifer von einer IP aus dein Konto nicht dauerhaft für dich sperren. */
   const loginKeys = (eh, ip) => [`${eh}|${ip}`, eh];
   const isLocked = (eh, ip) => locked(`${eh}|${ip}`) || locked(eh);
   const loginFailed = (eh, ip) => { failed(`${eh}|${ip}`, 8); failed(eh, 40); };
-  const loginOk = (eh, ip) => loginKeys(eh, ip).forEach(k => fails.delete(k));
+  const loginOk = (eh, ip) => loginKeys(eh, ip).forEach(k => q.delFail.run(fkey(k)));
 
   /* Schlüsselableitung (scrypt, 32 MB RAM) begrenzen: schützt vor Überlastung durch Massen-Logins */
   let kdfActive = 0;
@@ -105,11 +128,32 @@ function createServer(overrides = {}) {
   }
 
   const pendingTotp = new Map(); /* Sitzung -> {secret, until} während der Einrichtung */
+  const usedChallenges = new Map(); /* Bot-Schutz: bereits verwendete Aufgaben -> Ablaufzeit */
+  const powKey = crypto.createHmac('sha256', pepper).update('pow-key').digest();
+  const METRICS = { started: Date.now(), req: { '2xx': 0, '3xx': 0, '4xx': 0, '5xx': 0 }, login_ok: 0, login_fail: 0, register: 0, rate_limited: 0 };
+  function newChallenge() {
+    const body = `${Date.now()}.${crypto.randomBytes(12).toString('base64url')}`;
+    return `${body}.${crypto.createHmac('sha256', powKey).update(body).digest('base64url').slice(0, 22)}`;
+  }
+  const leadingZeroBits = buf => { let n = 0; for (const b of buf) { if (b === 0) { n += 8; continue; } n += Math.clz32(b) - 24; break; } return n; };
+  function checkPow(challenge, nonce) {
+    if (typeof challenge !== 'string' || typeof nonce !== 'string' || challenge.length > 120 || nonce.length > 24) return false;
+    const parts = challenge.split('.');
+    if (parts.length !== 3) return false;
+    const body = parts[0] + '.' + parts[1], mac = crypto.createHmac('sha256', powKey).update(body).digest('base64url').slice(0, 22);
+    if (!C.safeEq(Buffer.from(mac), Buffer.from(parts[2]))) return false;
+    const ts = Number(parts[0]);
+    if (!(ts > Date.now() - 10 * 60e3 && ts <= Date.now() + 5e3) || usedChallenges.has(challenge)) return false;
+    if (leadingZeroBits(crypto.createHash('sha256').update(challenge + ':' + nonce).digest()) < cfg.powBits) return false;
+    usedChallenges.set(challenge, ts + 10 * 60e3);
+    return true;
+  }
   const sweep = setInterval(() => {
     const now = Date.now();
     q.purgeSessions.run(now, now);
     for (const [k, v] of hits) { const a = v.filter(t => now - t < 3600e3); a.length ? hits.set(k, a) : hits.delete(k); }
-    for (const [k, f] of fails) if (f.until < now && now - f.first > 3600e3) fails.delete(k);
+    q.purgeFails.run(now, now - 3600e3);
+    for (const [k, t] of usedChallenges) if (t < now) usedChallenges.delete(k);
     for (const [k, p] of pendingTotp) if (p.until < now) pendingTotp.delete(k);
   }, 300e3);
   sweep.unref();
@@ -118,7 +162,16 @@ function createServer(overrides = {}) {
   class HttpError extends Error { constructor(status, code, message, extra) { super(message); this.status = status; this.code = code; this.extra = extra; } }
   const err = (s, c, m, x) => new HttpError(s, c, m, x);
   const isSecure = req => !!req.socket.encrypted || (cfg.trustProxy && req.headers['x-forwarded-proto'] === 'https');
-  const clientIp = req => (cfg.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
+  /* Client-IP: hinter einem Proxy der rechte (vom Proxy selbst angehängte) Eintrag in X-Forwarded-For – linke Einträge kann der Client fälschen.
+     Hinter Cloudflare: CLIENT_IP_HEADER=cf-connecting-ip (nur sicher, wenn der Server ausschließlich Cloudflare-Verbindungen annimmt). */
+  const clientIp = req => {
+    if (cfg.trustProxy) {
+      if (cfg.ipHeader) { const v = String(req.headers[cfg.ipHeader] || '').trim(); if (v) return v.slice(0, 64); }
+      const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
+      if (xff.length) return xff[xff.length - 1].slice(0, 64);
+    }
+    return req.socket.remoteAddress || '?';
+  };
   const cookieName = req => isSecure(req) ? '__Host-autopot' : 'autopot';
   function cookies(req) {
     const o = {};
@@ -188,6 +241,8 @@ function createServer(overrides = {}) {
     if (!s || s.expires_at < now || (s.absolute_expires && s.absolute_expires < now)) throw err(401, 'unauthorized', 'Sitzung abgelaufen. Bitte neu anmelden.');
     let dek;
     try { dek = C.open(C.sessionKey(token), s.dek_wrapped, 'sess'); } catch (e) { throw err(401, 'unauthorized', 'Sitzung ungültig.'); }
+    const owner = q.userById.get(s.user_id);
+    if (!owner || owner.disabled) throw err(401, 'unauthorized', 'Dieses Konto ist gesperrt.');
     if (now - s.last_seen > 36e5) q.touchSession.run(now, Math.min(now + cfg.sessionDays * DAY, s.absolute_expires || Infinity), th);
     return { userId: s.user_id, dek, tokenHash: th };
   }
@@ -210,8 +265,26 @@ function createServer(overrides = {}) {
   async function api(req, res, url) {
     const p = url.pathname, m = req.method, ip = clientIp(req);
     if (!rateOk('api:' + ip, cfg.apiPerMinute, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
-    if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true });
-    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, version: 6 });
+    if (p === '/api/health' && m === 'GET') {
+      let dbOk = false; try { dbOk = db.prepare('SELECT 1 AS x').get().x === 1; } catch (e) { /* unten */ }
+      return json(res, dbOk ? 200 : 503, { ok: dbOk, uptime: Math.round((Date.now() - METRICS.started) / 1000) });
+    }
+    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, mode: cfg.regMode, pow: cfg.regMode === 'open' ? cfg.powBits : 0, version: 7 });
+    if (p === '/api/metrics' && m === 'GET') {
+      const auth2 = String(req.headers.authorization || '');
+      if (!cfg.metricsToken || !C.safeEq(Buffer.from(auth2), Buffer.from('Bearer ' + cfg.metricsToken))) throw err(404, 'not_found', 'Nicht gefunden.');
+      let dbBytes = 0; try { dbBytes = fs.statSync(path.join(cfg.dataDir, 'autopot.sqlite')).size; } catch (e) { /* ignore */ }
+      const lines = ['# TYPE autopot_users gauge', `autopot_users ${q.countUsers.get().n}`, '# TYPE autopot_sessions gauge', `autopot_sessions ${q.countSessions.get().n}`,
+        '# TYPE autopot_db_bytes gauge', `autopot_db_bytes ${dbBytes}`, '# TYPE autopot_uptime_seconds gauge', `autopot_uptime_seconds ${Math.round((Date.now() - METRICS.started) / 1000)}`,
+        '# TYPE autopot_requests_total counter', ...Object.entries(METRICS.req).map(([k, v]) => `autopot_requests_total{class="${k}"} ${v}`),
+        '# TYPE autopot_logins_total counter', `autopot_logins_total{result="ok"} ${METRICS.login_ok}`, `autopot_logins_total{result="fail"} ${METRICS.login_fail}`,
+        '# TYPE autopot_registrations_total counter', `autopot_registrations_total ${METRICS.register}`, '# TYPE autopot_rate_limited_total counter', `autopot_rate_limited_total ${METRICS.rate_limited}`];
+      return send(res, 200, lines.join('\n') + '\n', { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-store' });
+    }
+    if (p === '/api/challenge' && m === 'GET') {
+      if (!rateOk('chal:' + ip, 30, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
+      return json(res, 200, { challenge: newChallenge(), bits: cfg.powBits });
+    }
     if (p === '/api/session' && m === 'GET') {
       try { const s = auth(req), u = q.userById.get(s.userId); return json(res, 200, { authenticated: true, createdAt: u.created_at, totp: !!u.totp_wrapped }); }
       catch (e) { if (e instanceof HttpError) return json(res, 200, { authenticated: false }); throw e; }
@@ -219,16 +292,29 @@ function createServer(overrides = {}) {
     csrfCheck(req);
 
     if (p === '/api/register' && m === 'POST') {
-      if (!cfg.registration) throw err(403, 'closed', 'Die Registrierung ist derzeit geschlossen.');
+      if (cfg.regMode === 'closed') throw err(403, 'closed', 'Die Registrierung ist derzeit geschlossen.');
       if (!rateOk('reg:' + ip, cfg.registerPerHour, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Registrierungen. Bitte später erneut versuchen.');
       const b = await readBody(req, 4096);
+      if (b.adult !== true) throw err(400, 'adult_required', 'Die Nutzung ist erst ab 18 Jahren erlaubt. Bitte das Alter bestätigen.');
+      if (b.terms !== true) throw err(400, 'terms_required', 'Bitte den Nutzungsbedingungen und der Datenschutzerklärung zustimmen.');
       const email = checkEmail(b.email); checkPassword(b.password, email);
+      let inviteHash = null;
+      if (cfg.regMode === 'invite') {
+        inviteHash = C.inviteHash(str(b.invite, 40));
+        if (!str(b.invite, 40) || Number(q.useInvite.run(inviteHash, Date.now()).changes) !== 1) throw err(403, 'bad_invite', 'Der Einladungscode ist ungültig, abgelaufen oder bereits verbraucht.');
+      } else if (cfg.powBits > 0 && !checkPow(b.challenge, b.nonce)) throw err(400, 'bad_challenge', 'Die Sicherheitsprüfung ist fehlgeschlagen. Bitte erneut versuchen.');
+      const refund = () => { if (inviteHash) q.refundInvite.run(inviteHash); };
+      if (cfg.maxUsers > 0 && q.countUsers.get().n >= cfg.maxUsers) { refund(); throw err(403, 'full', 'Es können derzeit keine neuen Konten angelegt werden.'); }
+      if (cfg.regDailyMax > 0 && q.countNewUsers.get(Date.now() - DAY).n >= cfg.regDailyMax) { refund(); throw err(429, 'busy', 'Heute wurden bereits sehr viele Konten angelegt. Bitte morgen erneut versuchen.'); }
       const eh = C.emailHash(pepper, email);
-      if (q.userByEmail.get(eh)) throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.');
-      const acc = await kdf(() => C.createAccount(b.password)), r = acc.row;
+      if (q.userByEmail.get(eh)) { refund(); throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.'); }
+      let acc;
+      try { acc = await kdf(() => C.createAccount(b.password)); } catch (e) { refund(); throw e; }
+      const r = acc.row;
       let id;
       try { id = Number(q.addUser.run(eh, r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, Date.now()).lastInsertRowid); }
-      catch (e) { throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.'); }
+      catch (e) { refund(); throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.'); }
+      METRICS.register++; q.setLastLogin.run(Date.now(), id);
       await startSession(req, res, id, acc.dek);
       logEvent(id, 'register');
       return json(res, 201, { ok: true, recoveryCode: acc.recovery });
@@ -243,15 +329,17 @@ function createServer(overrides = {}) {
       const row = user || await dummyRow;   /* unbekanntes Konto: gleiche Rechenzeit, damit Konten nicht erratbar sind */
       const dek = await kdf(() => C.unlock(row, str(b.password)));
       const dk = user ? dek : null;
-      if (!user || !dk) { loginFailed(eh, ip); if (user) logEvent(user.id, 'login_failed'); throw err(401, 'bad_login', 'E-Mail oder Passwort ist falsch.'); }
+      if (!user || !dk) { METRICS.login_fail++; loginFailed(eh, ip); if (user) logEvent(user.id, 'login_failed'); throw err(401, 'bad_login', 'E-Mail oder Passwort ist falsch.'); }
       if (user.totp_wrapped) {
         if (!b.totp) return json(res, 401, { error: 'totp_required', message: 'Bitte den 6-stelligen Code aus deiner Authenticator-App eingeben.' });
         const step = T.verify(totpSecretOf(user, dk), b.totp, user.totp_step);
         if (step < 0) { loginFailed(eh, ip); logEvent(user.id, 'totp_failed'); throw err(401, 'bad_totp', 'Der Code ist falsch oder abgelaufen.'); }
         q.setTotpStep.run(step, user.id);
       }
+      if (user.disabled) throw err(403, 'disabled', 'Dieses Konto ist gesperrt. Bitte wende dich an den Betreiber.');
       loginOk(eh, ip);
       await startSession(req, res, user.id, dk);
+      METRICS.login_ok++; q.setLastLogin.run(Date.now(), user.id);
       logEvent(user.id, 'login');
       return json(res, 200, { ok: true });
     }
@@ -282,7 +370,7 @@ function createServer(overrides = {}) {
     if (p === '/api/logout' && m === 'POST') { q.delSession.run(s.tokenHash); pendingTotp.delete(s.tokenHash); setCookie(res, req, '', 0); return json(res, 200, { ok: true }); }
     if (p === '/api/me' && m === 'GET') {
       const u = q.userById.get(s.userId);
-      return json(res, 200, { ok: true, createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n, totp: !!u.totp_wrapped });
+      return json(res, 200, { ok: true, createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n, totp: !!u.totp_wrapped, usageBytes: q.usage.get(s.userId, s.userId).b, quotaBytes: cfg.userQuotaMB * 1048576 });
     }
 
     if (p === '/api/state' && m === 'GET') {
@@ -297,8 +385,10 @@ function createServer(overrides = {}) {
       if (!b.data || typeof b.data !== 'object' || Array.isArray(b.data) || !Number.isInteger(b.baseVersion) || b.baseVersion < 0) throw err(400, 'bad_request', 'Ungültige Anfrage.');
       const cur = q.getDoc.get(s.userId, 'state'), curV = cur ? cur.version : 0;
       if (curV !== b.baseVersion) return json(res, 409, { error: 'conflict', message: 'Auf dem Server liegt ein neuerer Stand.', version: curV });
-      const now = Date.now();
-      q.putDoc.run(s.userId, 'state', curV + 1, sealJson(s.dek, b.data, `u${s.userId}:state`), now);
+      const now = Date.now(), blob = sealJson(s.dek, b.data, `u${s.userId}:state`);
+      const old = q.docLen.get(s.userId, 'state');
+      if (q.usage.get(s.userId, s.userId).b - (old ? old.b : 0) + blob.length > cfg.userQuotaMB * 1048576) throw err(413, 'quota', 'Dein Speicherplatz ist voll. Bitte alte Fotos löschen oder einen Grow abschließen.');
+      q.putDoc.run(s.userId, 'state', curV + 1, blob, now);
       return json(res, 200, { ok: true, version: curV + 1, updatedAt: now });
     }
 
@@ -316,7 +406,9 @@ function createServer(overrides = {}) {
         const b = await readBody(req, cfg.maxPhotoBytes + 1024);
         if (typeof b.data !== 'string' || b.data.length > cfg.maxPhotoBytes || !PHOTO_RE.test(b.data)) throw err(400, 'bad_photo', 'Ungültiges oder zu großes Foto.');
         if (!q.getPhoto.get(s.userId, id) && q.countPhotos.get(s.userId).n >= cfg.maxPhotosPerUser) throw err(413, 'quota', 'Foto-Limit erreicht.');
-        q.putPhoto.run(s.userId, id, C.seal(s.dek, Buffer.from(b.data), `u${s.userId}:photo:${id}`), Date.now());
+        const blob = C.seal(s.dek, Buffer.from(b.data), `u${s.userId}:photo:${id}`), old = q.photoLen.get(s.userId, id);
+        if (q.usage.get(s.userId, s.userId).b - (old ? old.b : 0) + blob.length > cfg.userQuotaMB * 1048576) throw err(413, 'quota', 'Dein Speicherplatz ist voll. Bitte alte Fotos löschen.');
+        q.putPhoto.run(s.userId, id, blob, Date.now());
         return json(res, 200, { ok: true });
       }
       if (m === 'DELETE') { q.delPhoto.run(s.userId, id); return json(res, 200, { ok: true }); }
@@ -386,6 +478,18 @@ function createServer(overrides = {}) {
       return json(res, 200, { ok: true, recoveryCode: nw.recovery });
     }
 
+    if (p === '/api/recovery-code' && m === 'POST') {
+      const b = await readBody(req, 4096);
+      if (!rateOk('rc:' + s.userId, 5, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche.');
+      const user = q.userById.get(s.userId), pw = str(b.password);
+      const dek = await kdf(() => C.unlock(user, pw));
+      if (!dek) throw err(401, 'bad_login', 'Das Passwort ist falsch.');
+      const nw = await kdf(() => C.rewrap(dek, pw)), r = nw.row;
+      q.updUser.run(r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, user.id);
+      logEvent(user.id, 'recovery_regenerated');
+      return json(res, 200, { ok: true, recoveryCode: nw.recovery });
+    }
+
     if (p === '/api/export' && m === 'GET') {
       if (!rateOk('export:' + s.userId, 10, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Exporte. Bitte später erneut versuchen.');
       const d = q.getDoc.get(s.userId, 'state');
@@ -412,9 +516,9 @@ function createServer(overrides = {}) {
 
   /* ---------- Statische Dateien (nur freigegebene Liste) ---------- */
   const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
-  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'app.js', 'app.css', 'qr.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
+  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'app.js', 'app.css', 'qr.js', 'pow-worker.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
     'img/preview-dark.jpg', 'img/preview-light.jpg', 'img/preview-mobile.jpg', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png']);
-  const ALIASES = { '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html' };
+  const ALIASES = { '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html', '/nutzungsbedingungen': 'nutzungsbedingungen.html' };
   const fcache = new Map();
   function serveStatic(req, res, pathname) {
     if (!['GET', 'HEAD'].includes(req.method)) throw err(405, 'method', 'Methode nicht erlaubt.');
@@ -446,7 +550,17 @@ function createServer(overrides = {}) {
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
     'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin', 'X-Permitted-Cross-Domain-Policies': 'none'
   };
+  const routeOf = p => p.replace(/^\/api\/(photos|sessions)\/[^/]+$/, '/api/$1/:id');
   const server = http.createServer(async (req, res) => {
+    const t0 = process.hrtime.bigint();
+    res.on('finish', () => {
+      const cls = `${String(res.statusCode)[0]}xx`; if (METRICS.req[cls] != null) METRICS.req[cls]++;
+      if (res.statusCode === 429) METRICS.rate_limited++;
+      if (cfg.accessLog) { /* Zugriffsprotokoll ohne IP-Adressen und ohne Inhalte */
+        let pth = '?'; try { pth = routeOf(new URL(req.url, 'http://x').pathname).slice(0, 80); } catch (e) { /* ignore */ }
+        process.stdout.write(JSON.stringify({ t: new Date().toISOString(), m: req.method, p: pth, s: res.statusCode, ms: Number((process.hrtime.bigint() - t0) / 1000000n) }) + '\n');
+      }
+    });
     Object.entries(SEC).forEach(([k, v]) => res.setHeader(k, v));
     if (!isSecure(req)) res.setHeader('Content-Security-Policy', SEC['Content-Security-Policy'].replace('; upgrade-insecure-requests', ''));
     else res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
@@ -470,8 +584,9 @@ function createServer(overrides = {}) {
 
 module.exports = { createServer, CFG };
 if (require.main === module) {
-  const s = createServer();
-  s.listen(CFG.port, CFG.host, () => console.log(`AutoPot Grow läuft auf http://${CFG.host === '0.0.0.0' ? 'localhost' : CFG.host}:${CFG.port} (Registrierung: ${CFG.registration ? 'offen' : 'geschlossen'})`));
+  const s = createServer({ accessLog: process.env.LOG !== 'off' });
+  const MODE = { open: 'offen', invite: 'nur mit Einladung', closed: 'geschlossen' };
+  s.listen(CFG.port, CFG.host, () => console.log(`AutoPot Grow läuft auf http://${CFG.host === '0.0.0.0' ? 'localhost' : CFG.host}:${CFG.port} (Registrierung: ${MODE[CFG.regMode]}${CFG.regMode === 'open' && CFG.powBits ? `, Bot-Schutz ${CFG.powBits} Bit` : ''})`));
   const stop = () => s.close(() => process.exit(0));
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
 }

@@ -29,17 +29,20 @@
 <li><strong>Sicherheitsprotokoll:</strong> Für dein Konto werden die letzten 60 sicherheitsrelevanten Ereignisse (z. B. Anmeldung, Fehlversuch, Passwortänderung) mit Art und Zeitpunkt gespeichert – ohne IP-Adresse. Rechtsgrundlage: berechtigtes Interesse an der Sicherheit deines Kontos (Art. 6 Abs. 1 lit. f DSGVO).</li>
 <li><strong>Sitzungen:</strong> ein zufälliges Token im Cookie („autopot“ bzw. „__Host-autopot“, HttpOnly, SameSite=Strict, Laufzeit bis zu 30 Tage ab der letzten Nutzung, höchstens 90 Tage) hält dich angemeldet. Es ist technisch erforderlich und braucht keine Einwilligung.</li>
 </ul>
-<h2>4. Server-Protokolle</h2>
-<p>[Betreiber: Hier eintragen, ob und wie lange dein Hoster IP-Adressen in Zugriffsprotokollen speichert.] Die Anwendung selbst schreibt keine IP-Adressen in die Datenbank. Zur Missbrauchsabwehr werden IP-Adressen kurzzeitig im Arbeitsspeicher gezählt.</p>
+<h2>4. Server-Protokolle und Missbrauchsschutz</h2>
+<p>[Betreiber: Hier eintragen, ob und wie lange dein Hoster bzw. ein vorgeschalteter Dienst wie Cloudflare IP-Adressen in Zugriffsprotokollen speichert.]</p>
+<p>Die Anwendung selbst protokolliert Zugriffe ohne IP-Adresse und ohne Inhalte (Zeitpunkt, Methode, aufgerufener Bereich, Statuscode, Dauer). Zur Abwehr von Missbrauch werden IP-Adressen kurzzeitig im Arbeitsspeicher gezählt. Fehlgeschlagene Anmeldungen werden für Sperren bis zu einer Stunde gespeichert – nur als nicht umkehrbarer Prüfwert (HMAC), nicht als IP-Adresse. Rechtsgrundlage: berechtigtes Interesse an der Sicherheit des Dienstes (Art. 6 Abs. 1 lit. f DSGVO).</p>
+<p>Bei der Registrierung löst dein Browser eine kurze Rechenaufgabe (Schutz gegen automatisierte Anmeldungen). Dabei werden keine personenbezogenen Daten erhoben und keine Drittanbieter eingebunden.</p>
 <h2>5. Keine Weitergabe, kein Tracking</h2>
 <p>Es werden keine Analyse-, Werbe- oder Social-Media-Dienste eingebunden und keine Schriften oder Skripte von Dritten geladen.</p>
 <h2>6. Speicherdauer und Löschung</h2>
-<p>Deine Daten bleiben bis zur Löschung deines Kontos gespeichert. In der App kannst du dein Konto samt aller Daten jederzeit selbst und endgültig löschen („Konto &amp; Cloud“ → „Konto löschen“).</p>
+<p>Deine Daten bleiben bis zur Löschung deines Kontos gespeichert. [Betreiber: Falls inaktive Konten gelöscht werden, hier die Frist eintragen, z. B. „nach 24 Monaten ohne Anmeldung“.] In der App kannst du dein Konto samt aller Daten jederzeit selbst und endgültig löschen („Konto &amp; Cloud“ → „Konto löschen“).</p>
 <h2>7. Deine Rechte</h2>
 <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und Widerspruch sowie das Recht auf Beschwerde bei einer Datenschutzaufsichtsbehörde. Auskunft und Datenübertragbarkeit erhältst du direkt in der App über „Alle Cloud-Daten exportieren“.</p>
 <h2>8. Gesundheit der Daten: dein Wiederherstellungscode</h2>
 <p>Weil die Daten verschlüsselt sind, kann auch der Betreiber sie ohne dein Passwort oder deinen Wiederherstellungscode nicht wiederherstellen.</p>
 </main>
+<p style="margin-top:32px"><a href="nutzungsbedingungen.html">Nutzungsbedingungen</a> · <a href="datenschutz.html">Datenschutz</a> · <a href="impressum.html">Impressum</a></p>
 <script src="site.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 /* Service Worker: macht App und Anleitung offline nutzbar (nur über http/https, nicht bei file://).
    Strategie: Cache zuerst, im Hintergrund aktualisieren. Version hochzählen, wenn sich Dateien ändern. */
-const CACHE = 'autopot-v6-1';
-const ASSETS = ['./', 'app.html', 'app.css', 'app.js', 'qr.js', 'theme-init.js', 'anleitung.html', 'anleitung.js', 'index.html', 'site.css', 'site.js', 'datenschutz.html', 'impressum.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'autopot-v7-1';
+const ASSETS = ['./', 'app.html', 'app.css', 'app.js', 'qr.js', 'theme-init.js', 'anleitung.html', 'anleitung.js', 'index.html', 'site.css', 'site.js', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'pow-worker.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => c.add(a).catch(() => {})))).then(() => self.skipWaiting()));

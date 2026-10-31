@@ -7,11 +7,13 @@ Grow-Tagebuch für passive AutoPot-Systeme (AirBase + AirDome, 50/50 Coco/Perlit
 | `/` (`index.html`) | Landingpage mit Funktionen, Sicherheit, FAQ, Registrieren/Anmelden |
 | `/app` (`app.html`) | Die Grow-App (läuft auch ohne Konto, dann nur lokal im Browser) |
 | `/anleitung` (`anleitung.html`) | Meisteranleitung mit 20 Kapiteln, druckfreundlich |
-| `/datenschutz`, `/impressum` | **Vorlagen** – vor dem Livegang ausfüllen und prüfen lassen |
+| `/datenschutz`, `/impressum`, `/nutzungsbedingungen` | **Vorlagen** – vor dem Livegang ausfüllen und rechtlich prüfen lassen |
+
+**Zum Online-Stellen bitte [DEPLOY.md](DEPLOY.md) lesen** (Docker Compose + Caddy, Cloudflare, Sicherungen, Überwachung, Checkliste). Sicherheitskonzept und Grenzen: [SECURITY.md](SECURITY.md).
 
 ## Schnellstart
 
-Voraussetzung: **Node.js ≥ 22.5**. Es gibt **keine Fremdpakete** – kein `npm install` nötig, um den Server zu betreiben.
+Voraussetzung: **Node.js ≥ 22.13** (siehe `.nvmrc`). Es gibt **keine Fremdpakete** – kein `npm install` nötig, um den Server zu betreiben.
 
 ```
 npm start                         # oder: node server/server.js
@@ -26,7 +28,13 @@ Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ord
 |---|---|---|
 | `PORT` / `HOST` | `8080` / `0.0.0.0` | Adresse |
 | `DATA_DIR` | `./server-data` | Ort der Datenbank |
-| `REGISTRATION` | `open` | `closed` = keine neuen Konten (z. B. nur für dich und Freunde) |
+| `REGISTRATION` | `open` | `open` = jede/r (mit Bot-Schutz), `invite` = nur mit Einladungscode, `closed` = keine neuen Konten |
+| `POW_BITS` | `16` | Schwierigkeit der Rechenaufgabe gegen Bots bei offener Registrierung (ca. 0,1–1 s im Browser), `0` = aus |
+| `MAX_USERS` / `REG_DAILY_MAX` | `0` / `50` | Höchstzahl Konten (0 = unbegrenzt) / neue Konten pro 24 h |
+| `USER_QUOTA_MB` | `200` | Speicher pro Konto |
+| `CLIENT_IP_HEADER` | – | Nur hinter Cloudflare: `cf-connecting-ip` (siehe DEPLOY.md) |
+| `METRICS_TOKEN` | – | Aktiviert `/api/metrics` (Prometheus) mit `Authorization: Bearer …` |
+| `LOG` | `on` | Zugriffsprotokoll ohne IP-Adressen auf stdout |
 | `TRUST_PROXY` | `0` | `1` hinter einem Reverse-Proxy mit HTTPS (Render, Fly, Caddy, nginx). Nötig für `Secure`-Cookies und korrekte IP-Begrenzung |
 | `SESSION_DAYS` | `30` | Laufzeit einer Anmeldung ab der letzten Nutzung |
 | `SESSION_MAX_DAYS` | `90` | Höchstdauer einer Anmeldung, danach immer neu anmelden |
@@ -39,11 +47,11 @@ Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ord
 
 **Pflicht: HTTPS.** Ohne HTTPS sind Passwörter auf dem Weg ungeschützt, und die App lässt sich nicht installieren.
 
-- **Docker (überall):** `docker build -t autopot . && docker run -p 8080:8080 -v autopot-data:/data -e TRUST_PROXY=1 autopot` – davor einen Reverse-Proxy mit HTTPS (z. B. Caddy: `deine-domain.de { reverse_proxy localhost:8080 }`).
+- **Empfohlen – eigener Server mit Docker Compose:** `cp .env.example .env`, Werte eintragen, `docker compose up -d --build`. Startet App, Caddy (automatisches HTTPS) und eine tägliche Sicherung mit Wiederherstellungsprobe. Container laufen schreibgeschützt, ohne Root-Rechte und mit Speicherlimit. Details in DEPLOY.md.
 - **Render.com:** `render.yaml` liegt bei (Docker + persistenter Speicher). Persistenter Speicher braucht einen bezahlten Plan; ohne ihn gehen bei jedem Neustart alle Konten verloren.
 - **Nur statisch (GitHub Pages):** funktioniert ebenfalls, dann aber **ohne Konten** – die App merkt das und blendet den Konto-Knopf aus.
 
-Vor dem Livegang: `impressum.html`, `datenschutz.html` und `.well-known/security.txt` mit echten Angaben füllen (Platzhalter in eckigen Klammern) und rechtlich prüfen lassen.
+Vor dem Livegang: `impressum.html`, `datenschutz.html`, `nutzungsbedingungen.html` und `.well-known/security.txt` mit echten Angaben füllen (Platzhalter in eckigen Klammern) und rechtlich prüfen lassen.
 
 ### Datenbank sichern
 
@@ -51,7 +59,11 @@ Vor dem Livegang: `impressum.html`, `datenschutz.html` und `.well-known/security
 npm run backup                    # konsistente Kopie nach server-data/backups/, mit Integritätsprüfung
 ```
 
-Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. Die Sicherung ist genauso verschlüsselt wie die Datenbank; zum Anmelden wird zusätzlich `server-secret.key` bzw. `AUTOPOT_SECRET` gebraucht – getrennt aufbewahren. Per Cron z. B. täglich: `0 3 * * * cd /app && npm run backup`.
+Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. `npm run restore-test` startet einen Server auf der neuesten Sicherung und prüft ihn (Wiederherstellungsprobe); `node server/restore.js <Datei> --yes` stellt wirklich wieder her.
+
+### Verwaltung
+
+`npm run admin -- stats` · `invite create --uses 3 --days 7` · `users` · `find <email>` · `disable <ID>` · `delete <ID> --yes` · `purge-inactive 730 --yes` – Übersicht in DEPLOY.md, Abschnitt 7. Inhalte der Nutzer sind auch hier nicht lesbar. Die Sicherung ist genauso verschlüsselt wie die Datenbank; zum Anmelden wird zusätzlich `server-secret.key` bzw. `AUTOPOT_SECRET` gebraucht – getrennt aufbewahren. Per Cron z. B. täglich: `0 3 * * * cd /app && npm run backup`.
 
 ## Sicherheit
 
@@ -78,25 +90,26 @@ Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. Die Siche
 ## Synchronisation
 
 - Offline zuerst: Die App speichert immer lokal (localStorage, Fotos in IndexedDB) und überträgt Änderungen 1,5 s später verschlüsselt zum Server; offline gesammelte Änderungen werden nachgeholt.
-- Mehrere Geräte: Versionsnummern erkennen gleichzeitige Änderungen; Einträge, Rezepte, Ereignisse, Erinnerungen und Archiv werden dann zusammengeführt, bei Einstellungen gewinnt das Gerät, das zuletzt speichert. Gelöschte Einträge können bei gleichzeitiger Bearbeitung auf einem zweiten Gerät zurückkehren.
+- Mehrere Geräte: Versionsnummern erkennen gleichzeitige Änderungen; Einträge, Rezepte, Ereignisse, Erinnerungen und Archiv werden dann zusammengeführt, bei Einstellungen gewinnt das Gerät, das zuletzt speichert. Löschungen werden als Löschmarker mitsynchronisiert (180 Tage aufbewahrt), damit gelöschte Einträge nicht auf anderen Geräten wiederauftauchen.
 - Fotos werden einzeln übertragen und erst bei Bedarf auf neue Geräte geladen.
 - Beim ersten Anmelden werden vorhandene lokale Daten ins Konto übernommen. Beim Abmelden fragt die App, ob die Daten vom Gerät entfernt werden sollen (auf fremden Geräten: ja). Daten eines anderen Kontos auf demselben Gerät werden nie ins neue Konto übernommen.
 
 ## API (kurz)
 
-`POST /api/register | /api/login (optional `totp`) | /api/recover | /api/logout | /api/password`, `POST /api/2fa/setup | /api/2fa/enable | /api/2fa/disable`, `GET /api/sessions`, `DELETE /api/sessions/:id | /api/sessions/others`, `GET /api/security-log`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `DELETE /api/account`, `GET /api/health | /api/config`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
+`POST /api/register | /api/login (optional `totp`) | /api/recover | /api/logout | /api/password`, `POST /api/2fa/setup | /api/2fa/enable | /api/2fa/disable`, `GET /api/sessions`, `DELETE /api/sessions/:id | /api/sessions/others`, `GET /api/security-log`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `POST /api/recovery-code`, `GET /api/challenge` (Bot-Schutz), `DELETE /api/account`, `GET /api/health | /api/config | /api/metrics`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
 
 ## Funktionen der App
 
 Übersicht mit Tageszähler, Phasenleiste, Grow-Score, Messserie, **Ernteprognose** (Blütewoche, voraussichtlicher Erntetermin) und **Tipp passend zur Phase** · **Wochenbericht** (Ø-Werte mit Trend zur Vorwoche, Zuwachs, Zielquote) · „Letzte Werte übernehmen“ beim Eintragen, Löschen mit **Rückgängig** · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, **Stromkosten**, VPD-Heatmap) · **Wissen**: Richtwerte-Tabelle je Phase, Nährstoff-Lexikon (mobil/immobil, Anzeichen, Ursachen), Glossar · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos, optional passwortverschlüsselt), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
 
-### Datenformat (Schema v5)
+### Datenformat (Schema v6)
 
 ```
 { version, settings{name, phase, startDate, phaseStart, flowerStart, flowerWeeks, lightHours, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
   entries[{id, date, phase, ec, ph, waterTemp, airTemp, humidity, ppfd, use, height, tags, note, hasPhoto}],
   recipes[], events[], reminders[], checks{setup{}, week{}},
-  harvest{date, wet, dry, watt, note}, archive[{id, name, start, end, entries, days, wet, dry, watt, avgEc, avgPh}] }
+  harvest{date, wet, dry, watt, note}, archive[{id, name, start, end, entries, days, wet, dry, watt, avgEc, avgPh}],
+  deleted{entries{}, recipes{}, events{}, reminders{}, archive{}} }   // Löschmarker: id → Zeitpunkt
 ```
 
 Backups älterer Versionen werden beim Import ergänzt. `data/autopot-grow-backup.json` enthält den bisherigen Datenstand zum Import.
@@ -108,9 +121,13 @@ npm install            # nur für die Browser-Tests (Playwright)
 npm test               # Server-Tests, App-Tests, End-to-End mit zwei Geräten
 ```
 
-- `tests/server.test.js` (15) – Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
+- `tests/server.test.js` (20) – Bot-Schutz, Altersbestätigung, Einladungen, Verwaltungswerkzeug, Kontingent, gesperrte Konten, dauerhafte Sperren, Metriken, Wiederherstellungsprobe, Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
 - `tests/smoke.test.js` (102) – App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
-- `tests/e2e.test.js` (38) – Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
+- `tests/e2e.test.js` (43) – Löschungen über Geräte hinweg, Einladungsmodus, Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
+
+- `tests/load.js` – Lasttest (`npm run test:load`). Ergebnis auf 2 CPU-Kernen: ~1 500 Anfragen/s an die Daten-API (p95 56 ms, keine Fehler), 40 gleichzeitige Logins in 1,3 s, ~265 MB RAM.
+
+Barrierefreiheit und Kompatibilität: „Zum Inhalt springen“-Link, Beschriftungen für alle Bedienelemente, Kontraste nach WCAG AA (≥ 4,5:1 für Text) in beiden Farbschemata geprüft, Ersatzfarben für Browser ohne `color-mix()` (z. B. iOS < 16.2), reduzierte Bewegung wird respektiert.
 
 ## Richtwerte
 

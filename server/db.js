@@ -36,7 +36,27 @@ function openDb(dir) {
       PRIMARY KEY (user_id, id)
     );
   `);
+  migrate(db);
   return db;
+}
+
+/* Schema-Erweiterungen idempotent nachziehen (PRAGMA user_version) */
+function migrate(db) {
+  const v = db.prepare('PRAGMA user_version').get().user_version;
+  const cols = t => new Set(db.prepare(`PRAGMA table_info(${t})`).all().map(c => c.name));
+  if (v < 2) {
+    const u = cols('users'), s = cols('sessions');
+    if (!u.has('totp_wrapped')) db.exec('ALTER TABLE users ADD COLUMN totp_wrapped BLOB');
+    if (!u.has('totp_step')) db.exec('ALTER TABLE users ADD COLUMN totp_step INTEGER NOT NULL DEFAULT 0');
+    if (!s.has('label')) db.exec('ALTER TABLE sessions ADD COLUMN label BLOB');
+    if (!s.has('absolute_expires')) db.exec('ALTER TABLE sessions ADD COLUMN absolute_expires INTEGER NOT NULL DEFAULT 0');
+    db.exec(`CREATE TABLE IF NOT EXISTS sec_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL, at INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS sec_events_user ON sec_events(user_id, at);
+      PRAGMA user_version = 2;`);
+  }
 }
 
 /* Server-Geheimnis (Pepper für den E-Mail-Blindindex): Umgebungsvariable oder Datei mit 0600 */

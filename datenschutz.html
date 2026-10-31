@@ -24,7 +24,10 @@
 <li><strong>E-Mail-Adresse:</strong> wird nicht im Klartext gespeichert, sondern nur als nicht umkehrbarer Prüfwert (HMAC-SHA-256 mit geheimem Serverschlüssel), um dich beim Anmelden wiederzuerkennen. Der Server kann dir deshalb auch keine E-Mails senden.</li>
 <li><strong>Passwort:</strong> wird nur als scrypt-Ableitung geprüft, nie im Klartext gespeichert.</li>
 <li><strong>Nutzerdaten</strong> (Messwerte, Notizen, Einstellungen, Fotos): werden mit einem zufälligen, nutzerbezogenen Schlüssel per AES-256-GCM verschlüsselt gespeichert. Dieser Schlüssel ist durch dein Passwort und deinen Wiederherstellungscode geschützt.</li>
-<li><strong>Sitzungen:</strong> ein zufälliges Token im Cookie („autopot“ bzw. „__Host-autopot“, HttpOnly, SameSite=Strict, Laufzeit bis zu 30 Tage) hält dich angemeldet. Es ist technisch erforderlich und braucht keine Einwilligung.</li>
+<li><strong>Zwei-Faktor-Anmeldung (optional):</strong> Der geheime Schlüssel für die Authenticator-App wird mit deinem Datenschlüssel verschlüsselt gespeichert.</li>
+<li><strong>Angemeldete Geräte:</strong> Zu jeder Sitzung speichern wir eine grobe Gerätebezeichnung (z. B. „Chrome · Android“, verschlüsselt) sowie Zeitpunkt der Anmeldung und der letzten Aktivität, damit du deine Geräte überblicken und abmelden kannst.</li>
+<li><strong>Sicherheitsprotokoll:</strong> Für dein Konto werden die letzten 60 sicherheitsrelevanten Ereignisse (z. B. Anmeldung, Fehlversuch, Passwortänderung) mit Art und Zeitpunkt gespeichert – ohne IP-Adresse. Rechtsgrundlage: berechtigtes Interesse an der Sicherheit deines Kontos (Art. 6 Abs. 1 lit. f DSGVO).</li>
+<li><strong>Sitzungen:</strong> ein zufälliges Token im Cookie („autopot“ bzw. „__Host-autopot“, HttpOnly, SameSite=Strict, Laufzeit bis zu 30 Tage ab der letzten Nutzung, höchstens 90 Tage) hält dich angemeldet. Es ist technisch erforderlich und braucht keine Einwilligung.</li>
 </ul>
 <h2>4. Server-Protokolle</h2>
 <p>[Betreiber: Hier eintragen, ob und wie lange dein Hoster IP-Adressen in Zugriffsprotokollen speichert.] Die Anwendung selbst schreibt keine IP-Adressen in die Datenbank. Zur Missbrauchsabwehr werden IP-Adressen kurzzeitig im Arbeitsspeicher gezählt.</p>

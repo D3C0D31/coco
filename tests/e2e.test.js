@@ -6,6 +6,8 @@ const path = require('path');
 let playwright;
 try { playwright = require('playwright'); } catch (e) { playwright = require(process.env.PLAYWRIGHT_PATH || '/home/claude/.npm-global/lib/node_modules/playwright'); }
 const { createServer } = require('../server/server');
+const T = require('../server/totp');
+const b32dec = t => Buffer.from(t.split('').map(ch => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(ch).toString(2).padStart(5, '0')).join('').match(/.{8}/g).map(x => parseInt(x, 2)));
 
 let failures = 0;
 const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) failures++; };
@@ -33,7 +35,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   /* ---------- Landingpage ---------- */
   const A = await device(); const a = A.page;
   await a.goto(base + '/');
-  ok((await a.title()).includes('AutoPot Grow') && (await a.locator('#features .card').count()) === 9, 'Landingpage lädt mit 9 Funktionskarten');
+  ok((await a.title()).includes('AutoPot Grow') && (await a.locator('#features .card').count()) === 14, 'Landingpage lädt mit 14 Funktionskarten');
   ok(await a.locator('a[data-needs-reg]').first().isVisible(), 'Landingpage: Registrieren-Knopf sichtbar');
   ok((await a.locator('img.dark-only').getAttribute('src')) === 'img/preview-dark.jpg' && (await (await a.request.get(base + '/img/preview-dark.jpg')).ok()), 'Landingpage: Vorschaubild erreichbar');
   for (const p of ['/datenschutz.html', '/impressum.html']) ok((await a.request.get(base + p)).ok(), p + ' erreichbar');
@@ -90,6 +92,15 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   await b.fill('#fNote', 'B-parallel'); await b.fill('#fEc', '1.2'); await b.click('#saveEntry');
   ok(await waitFor(async () => { const n = (await serverHas()).notes; return n.includes('A-offline') && n.includes('B-parallel'); }, 15000), 'Parallele Änderungen beider Geräte werden zusammengeführt');
 
+  /* ---------- Geräte und Sicherheitsprotokoll ---------- */
+  await a.click('#accountBtn'); await a.click('#acctIn summary:has-text("Angemeldete Geräte")');
+  ok(await waitFor(async () => (await a.locator('#sessList .item').count()) === 2), 'Geräte: beide Geräte werden angezeigt');
+  await a.click('#sessList [data-sess]');
+  ok(await waitFor(async () => !(await b.evaluate(async () => (await (await fetch('/api/session')).json()).authenticated))), 'Geräte: Gerät B aus der Ferne abgemeldet');
+  await a.click('#acctIn summary:has-text("Sicherheitsprotokoll")');
+  ok(await waitFor(async () => { const t = await a.textContent('#secLog'); return t.includes('Ein Gerät abgemeldet') && t.includes('Fehlgeschlagene Anmeldung') && t.includes('Konto erstellt'); }), 'Sicherheitsprotokoll zeigt Ereignisse inkl. Fehlversuch');
+  await a.keyboard.press('Escape');
+
   /* ---------- Passwort ändern ---------- */
   await a.click('#accountBtn');
   await a.click('#acctIn summary:has-text("Passwort ändern")');
@@ -118,6 +129,39 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => (await a.textContent('#logBody')).includes('Noch keine Einträge') && !(await a.evaluate(() => document.getElementById('accountDlg').open))), 'Konto löschen: lokale Daten entfernt');
   const gone = await a.evaluate(async (e) => (await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' }, body: JSON.stringify({ email: e, password: 'Neues-Passwort-2026!' }) })).status, EMAIL);
   ok(gone === 401, 'Konto löschen: Anmeldung danach unmöglich');
+
+  /* ---------- Zwei-Faktor-Anmeldung im Browser ---------- */
+  const D = await device(); const d = D.page;
+  await d.goto(base + '/app.html?mode=register'); await d.waitForSelector('#accountDlg[open]');
+  await d.fill('#reEmail', 'zwei@example.org'); await d.fill('#rePw', 'kurzes123'); 
+  ok((await d.textContent('[data-pwmeter="rePw"]')).includes('schwach'), 'Passwortstärke-Anzeige: schwaches Passwort erkannt');
+  await d.fill('#rePw', 'Sicheres-Kennwort-2026!'); await d.fill('#rePw2', 'Sicheres-Kennwort-2026!');
+  ok(/gut|stark/.test(await d.textContent('[data-pwmeter="rePw"]')), 'Passwortstärke-Anzeige: starkes Passwort erkannt');
+  await d.check('#registerForm [name=consent]'); await d.click('#registerForm button[type=submit]');
+  await d.waitForSelector('#acctRecovery:not(.hidden)'); await d.check('#recoveryOk'); await d.click('#recoveryDone');
+  await d.click('#accountBtn'); await d.click('#tfaBox summary'); await d.click('#tfaStart');
+  await d.waitForSelector('#tfaQr svg');
+  const uri = await d.getAttribute('#tfaLink', 'href');
+  ok(/^otpauth:\/\/totp\//.test(uri), '2FA: Einrichtungslink für Authenticator-Apps');
+  try {
+    const shot = path.join(dir, 'qr.png'); await d.locator('#tfaQr').screenshot({ path: shot });
+    const out = require('child_process').execFileSync('python3', ['-c', 'import cv2,sys;print(cv2.QRCodeDetector().detectAndDecode(cv2.imread(sys.argv[1]))[0])', shot]).toString().trim();
+    ok(out === uri, '2FA: QR-Code im Browser ist lesbar und enthält den Einrichtungslink');
+  } catch (e) { console.log('SKIP QR-Decoder (python3/OpenCV nicht vorhanden)'); }
+  const secret = b32dec((await d.textContent('#tfaSecret')).replace(/\s+/g, ''));
+  const step = T.currentStep();
+  await d.fill('#tfaCode', T.code(secret, step)); await d.click('#tfaEnableForm button[type=submit]');
+  ok(await waitFor(async () => (await d.textContent('#tfaState')).includes('aktiv')), '2FA: im Browser aktiviert');
+  await d.click('#logoutBtn');
+  await waitFor(async () => (await d.textContent('#logBody')).includes('Noch keine') && !(await d.evaluate(() => document.getElementById('accountDlg').open)));
+  await d.click('#accountBtn'); await d.fill('#liEmail', 'zwei@example.org'); await d.fill('#liPw', 'Sicheres-Kennwort-2026!');
+  await d.click('#loginForm button[type=submit]');
+  ok(await waitFor(async () => d.locator('#liTotpWrap').isVisible()), '2FA: Login fragt den Code ab');
+  await d.fill('#liTotp', T.code(secret, step)); await d.click('#loginForm button[type=submit]');
+  ok(await waitFor(async () => (await d.textContent('#acctMsg')).includes('falsch oder abgelaufen')), '2FA: bereits benutzter Code wird abgelehnt');
+  await d.fill('#liTotp', T.code(secret, step + 1)); await d.click('#loginForm button[type=submit]');
+  ok(await waitFor(async () => d.evaluate(async () => (await (await fetch('/api/session')).json()).authenticated)), '2FA: Login mit neuem Code erfolgreich');
+  await D.ctx.close();
 
   /* Registrierung geschlossen */
   await A.ctx.close(); await B.ctx.close();

@@ -44,6 +44,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   page.on('pageerror', e => { errors.push('pageerror: ' + e.message); if (process.env.DEBUG_TEST) console.log('PAGEERROR', e.message); });
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   page.on('dialog', d => d.accept());
+  const toastText = () => page.textContent('#toast');
 
   const wipe = async () => {
     await page.evaluate(async () => {
@@ -115,7 +116,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   /* Backup mit Foto → alles löschen → Import stellt Foto wieder her */
   const bkPath = await viaData('#backupJson');
   const bj = JSON.parse(fs.readFileSync(bkPath, 'utf8'));
-  ok(bj.version === 4 && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v4, enthält das Foto');
+  ok(bj.version === 5 && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v5, enthält das Foto');
   await wipe();
   ok((await rowsCount()) === 1 && (await page.textContent('#logBody')).includes('Noch keine'), 'Foto: Speicher komplett geleert');
   await page.setInputFiles('#importFile', bkPath);
@@ -290,6 +291,59 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   ok(!(await page.evaluate(() => document.getElementById('moreSheet').open)), 'v4: Sheet schließt nach Auswahl');
   ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)), 'v4: Mobil ohne horizontalen Überlauf (mit Daten)');
   await page.setViewportSize({ width: 1200, height: 900 });
+
+
+  /* ---------- v6: Wissen, Wochenbericht, Rückgängig, Ernteprognose, Strom, verschlüsseltes Backup ---------- */
+  await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');
+  await wipe();
+  ok((await page.textContent('#tipBox')).includes('Tipp für die Phase'), 'v6: Tipp des Tages');
+  ok((await page.locator('#refTable tbody tr').count()) === 5 && (await page.locator('#refTable tr.now').count()) === 1, 'v6: Richtwerte-Tabelle mit hervorgehobener Phase');
+  ok((await page.locator('#nutriList .card').count()) === 10, 'v6: Nährstoff-Lexikon mit 10 Nährstoffen');
+  await page.fill('#nutriSearch', 'spitzen');
+  const nHits = await page.locator('#nutriList .card').count();
+  ok(nHits >= 1 && nHits < 10, 'v6: Lexikon-Suche filtert (' + nHits + ' Treffer)');
+  await page.fill('#nutriSearch', '');
+  ok((await page.locator('#glossar dt').count()) >= 12, 'v6: Glossar');
+  const iso6 = off => page.evaluate(o => { const d = new Date(); d.setDate(d.getDate() + o); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }, off);
+  await page.fill('#fDate', await iso6(-8)); await page.fill('#fEc', '1.2'); await page.fill('#fPh', '6.0'); await page.fill('#fAir', '25'); await page.fill('#fRh', '60'); await page.fill('#fHeight', '10'); await page.fill('#fNote', 'Geheime-Notiz-77');
+  await page.click('#saveEntry'); await page.waitForTimeout(150);
+  await page.fill('#fDate', await iso6(0));
+  await page.click('#fillLast');
+  ok((await page.inputValue('#fEc')) === '1.2' && (await page.inputValue('#fHeight')) === '10' && (await page.inputValue('#fNote')) === '', 'v6: „Letzte Werte übernehmen“ füllt Messwerte, nicht die Notiz');
+  await page.fill('#fEc', '1.4'); await page.fill('#fHeight', '15');
+  await page.click('#saveEntry'); await page.waitForTimeout(150);
+  const wk = (await page.textContent('#weekly')).replace(/\s+/g, ' ');
+  ok(wk.includes('Zuwachs 5 cm') && wk.includes('▲ 0,2'), 'v6: Wochenbericht mit Trend und Zuwachs (' + wk.slice(0, 120) + ')');
+  await page.locator('[data-act="del-entry"]').first().click();
+  ok((await rowsCount()) === 1 && (await toastText()).includes('gelöscht'), 'v6: Eintrag gelöscht, Hinweis mit Rückgängig');
+  await page.click('#toast .toast-act');
+  await page.waitForTimeout(200);
+  ok((await rowsCount()) === 2, 'v6: Löschen rückgängig gemacht');
+  await page.selectOption('#sPhase', 'Übergang / frühe Blüte');
+  ok((await page.inputValue('#sFlowerStart')) === await iso6(0) && (await page.inputValue('#sLight')) === '12', 'v6: Blütebeginn und 12 h Licht automatisch gesetzt');
+  ok((await page.textContent('#heroFlower')).includes('Blütewoche 1 von 9'), 'v6: Ernteprognose im Übersichtsbereich');
+  await page.fill('#sFlowerWeeks', '8');
+  ok((await page.textContent('#heroFlower')).includes('von 8') && (await page.textContent('#heroFlower')).includes('noch 56 Tage'), 'v6: Erntetermin aus Blütedauer (' + (await page.textContent('#heroFlower')) + ')');
+  await page.fill('#pwWatt', '200'); await page.fill('#pwHours', '12'); await page.fill('#pwExtra', '0'); await page.fill('#pwPrice', '0.40');
+  const pw = (await page.textContent('#pwOut')).replace(/\s+/g, ' ');
+  ok(pw.includes('2,4 kWh') && pw.includes('0,96'), 'v6: Stromkosten 200 W × 12 h × 0,40 € (' + pw.slice(0, 60) + ')');
+  await page.click('#dataBtn'); await page.check('#bkEncrypt');
+  await page.fill('#bkPw', 'kurz'); await page.fill('#bkPw2', 'kurz'); await page.click('#backupJson');
+  ok((await toastText()).includes('mindestens 8'), 'v6: zu kurzes Backup-Passwort abgelehnt');
+  await page.fill('#bkPw', 'Backup-Geheim-1'); await page.fill('#bkPw2', 'Backup-Geheim-1');
+  const encPath = await download(() => page.click('#backupJson'));
+  const encTxt = fs.readFileSync(encPath, 'utf8'), enc = JSON.parse(encTxt);
+  ok(enc.format === 'autopot-encrypted-backup' && enc.cipher === 'AES-256-GCM' && enc.iterations >= 600000 && !encTxt.includes('Geheime-Notiz-77'), 'v6: verschlüsseltes Backup ohne Klartext');
+  await wipe();
+  await page.setInputFiles('#importFile', encPath);
+  await page.waitForSelector('#pwAsk[open]');
+  await page.fill('#pwAskInput', 'falsches-pw'); await page.click('#pwAskOk');
+  await page.waitForTimeout(1500);
+  ok((await toastText()).includes('Falsches Passwort') && (await rowsCount()) === 1, 'v6: falsches Backup-Passwort wird erkannt');
+  await page.setInputFiles('#importFile', encPath);
+  await page.waitForSelector('#pwAsk[open]');
+  await page.fill('#pwAskInput', 'Backup-Geheim-1'); await page.click('#pwAskOk');
+  ok(await (async () => { for (let i = 0; i < 40; i++) { if ((await rowsCount()) === 2) return true; await page.waitForTimeout(150); } return false; })() && (await page.textContent('#logBody')).includes('Geheime-Notiz-77'), 'v6: verschlüsseltes Backup wiederhergestellt');
 
   /* ---------- Mobil & Direktstart ohne Server ---------- */
   await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');

@@ -11,7 +11,7 @@ let srv, base;
 const H = { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' };
 
 async function start() {
-  srv = createServer({ dataDir: dir, registration: true });
+  srv = createServer({ dataDir: dir, registration: true, registerPerHour: 100, loginPer10Min: 200 });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${srv.address().port}`;
 }
@@ -168,4 +168,98 @@ test('Export und Konto löschen', async () => {
   const db = new (require('node:sqlite').DatabaseSync)(path.join(dir, 'autopot.sqlite'));
   assert.equal(db.prepare('SELECT COUNT(*) n FROM photos WHERE id=?').get('keep1').n, 0, 'Fotos sind mit dem Konto gelöscht');
   db.close();
+});
+
+/* ---------- Erweiterungen v6 ---------- */
+const T = require('../server/totp');
+
+test('Zwei-Faktor-Anmeldung: Einrichtung, Pflicht beim Login, Replay-Schutz, Rücksetzen per Wiederherstellung', async () => {
+  const a = client();
+  const reg = await a('POST', '/api/register', { email: 'erin@example.org', password: PW });
+  const setup = await a('POST', '/api/2fa/setup');
+  assert.equal(setup.status, 200);
+  assert.match(setup.data.uri, /^otpauth:\/\/totp\/AutoPot%20Grow:.+secret=[A-Z2-7]{32}&issuer=AutoPot%20Grow/);
+  const secret = Buffer.from(setup.data.secret.split('').reduce((acc, ch) => acc + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(ch).toString(2).padStart(5, '0'), '').match(/.{8}/g).map(b => parseInt(b, 2)));
+  assert.equal((await a('POST', '/api/2fa/enable', { code: '000000' === T.code(secret, T.currentStep()) ? '111111' : '000000' })).status, 400);
+  const step = T.currentStep();
+  assert.equal((await a('POST', '/api/2fa/enable', { code: T.code(secret, step) })).status, 200);
+  assert.equal((await a('GET', '/api/me')).data.totp, true);
+  const b = client();
+  const need = await b('POST', '/api/login', { email: 'erin@example.org', password: PW });
+  assert.equal(need.status, 401); assert.equal(need.data.error, 'totp_required');
+  assert.equal((await b('POST', '/api/login', { email: 'erin@example.org', password: PW, totp: T.code(secret, step) })).data.error, 'bad_totp', 'bereits benutzter Code wird abgelehnt');
+  assert.equal((await b('POST', '/api/login', { email: 'erin@example.org', password: PW, totp: T.code(secret, step + 1) })).status, 200);
+  assert.equal((await b('POST', '/api/2fa/disable', { password: 'falsch-falsch-1', code: '123456' })).status, 401);
+  const db = new (require('node:sqlite').DatabaseSync)(path.join(dir, 'autopot.sqlite'));
+  const raw = db.prepare("SELECT totp_wrapped FROM users WHERE totp_wrapped IS NOT NULL").all();
+  db.close();
+  assert.ok(raw.length && raw.every(r => !Buffer.from(r.totp_wrapped).includes(secret)), 'TOTP-Geheimnis liegt verschlüsselt vor');
+  const c = client();
+  const rec = await c('POST', '/api/recover', { email: 'erin@example.org', recoveryCode: reg.data.recoveryCode, newPassword: 'Ganz-neues-Kennwort-7' });
+  assert.equal(rec.status, 200); assert.equal(rec.data.totpReset, true);
+  assert.equal((await client()('POST', '/api/login', { email: 'erin@example.org', password: 'Ganz-neues-Kennwort-7' })).status, 200, 'nach Wiederherstellung ohne 2FA');
+  const log = (await c('GET', '/api/security-log')).data.events.map(e => e.type);
+  for (const t of ['register', '2fa_enabled', 'login', 'recovery_used', '2fa_disabled']) assert.ok(log.includes(t), 'Protokoll enthält ' + t);
+});
+
+test('Geräte: Liste mit Bezeichnung, einzelne und alle anderen abmelden', async () => {
+  const UA = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36' };
+  const a = client(), b = client(), c = client();
+  await a('POST', '/api/register', { email: 'frank@example.org', password: PW });
+  await b('POST', '/api/login', { email: 'frank@example.org', password: PW }, UA);
+  await c('POST', '/api/login', { email: 'frank@example.org', password: PW });
+  const list = (await a('GET', '/api/sessions')).data.sessions;
+  assert.equal(list.length, 3);
+  assert.equal(list.filter(x => x.current).length, 1);
+  assert.ok(list.some(x => x.label === 'Chrome · Android'), 'Gerätebezeichnung aus User-Agent');
+  const bId = (await b('GET', '/api/sessions')).data.sessions.find(x => x.current).id;
+  assert.equal((await a('DELETE', '/api/sessions/' + bId)).status, 200);
+  assert.equal((await b('GET', '/api/me')).status, 401, 'abgemeldetes Gerät verliert Zugriff');
+  assert.equal((await a('DELETE', '/api/sessions/others')).data.removed, 1);
+  assert.equal((await c('GET', '/api/me')).status, 401);
+  assert.equal((await a('GET', '/api/me')).status, 200, 'eigene Sitzung bleibt');
+  const db = new (require('node:sqlite').DatabaseSync)(path.join(dir, 'autopot.sqlite'));
+  const labels = db.prepare('SELECT label FROM sessions').all();
+  db.close();
+  assert.ok(labels.every(r => !r.label || !Buffer.from(r.label).includes('Android')), 'Gerätebezeichnung verschlüsselt gespeichert');
+});
+
+test('Sperre gilt pro Konto und IP – ein Angreifer sperrt dich nicht aus', async () => {
+  const d2 = fs.mkdtempSync(path.join(os.tmpdir(), 'autopot-srv2-'));
+  const s2 = createServer({ dataDir: d2, trustProxy: true, loginPer10Min: 200 });
+  await new Promise(r => s2.listen(0, '127.0.0.1', r));
+  const b2 = `http://127.0.0.1:${s2.address().port}`;
+  const call = (ip, body, url = '/api/login') => fetch(b2 + url, { method: 'POST', headers: Object.assign({ 'X-Forwarded-For': ip }, H), body: JSON.stringify(body) }).then(r => r.status);
+  assert.equal(await call('9.9.9.9', { email: 'gina@example.org', password: PW }, '/api/register'), 201);
+  for (let i = 0; i < 8; i++) await call('6.6.6.6', { email: 'gina@example.org', password: 'falsch-falsch-' + i });
+  assert.equal(await call('6.6.6.6', { email: 'gina@example.org', password: PW }), 429, 'Angreifer-IP gesperrt');
+  assert.equal(await call('7.7.7.7', { email: 'gina@example.org', password: PW }), 200, 'Inhaberin von anderer IP weiter erlaubt');
+  await new Promise(r => s2.close(r));
+  fs.rmSync(d2, { recursive: true, force: true });
+});
+
+test('Härtung: Content-Type, Cache, robots/security.txt, Header', async () => {
+  const r = await fetch(base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'text/plain', 'X-Requested-With': 'autopot' }, body: '{"email":"a@b.cd","password":"x"}' });
+  assert.equal(r.status, 415);
+  const cross = await fetch(base + '/api/login', { method: 'POST', headers: Object.assign({ 'Sec-Fetch-Site': 'cross-site' }, H), body: '{}' });
+  assert.equal(cross.status, 403);
+  const app = await fetch(base + '/app.js');
+  const etag = app.headers.get('etag');
+  assert.ok(etag);
+  assert.equal((await fetch(base + '/app.js', { headers: { 'If-None-Match': etag } })).status, 304);
+  assert.match(await (await fetch(base + '/robots.txt')).text(), /Disallow: \/api\//);
+  assert.match(await (await fetch(base + '/.well-known/security.txt')).text(), /Contact:/);
+  assert.equal((await fetch(base + '/' + 'x'.repeat(3000))).status, 414);
+  const h = (await fetch(base + '/')).headers;
+  assert.equal(h.get('x-frame-options'), 'DENY');
+  assert.match(h.get('permissions-policy'), /camera=\(\)/);
+});
+
+test('Backup-Skript erzeugt geprüfte Sicherung', async () => {
+  const { execFileSync } = require('child_process');
+  const out = execFileSync(process.execPath, ['--disable-warning=ExperimentalWarning', path.join(__dirname, '..', 'server', 'backup.js')], { env: Object.assign({}, process.env, { DATA_DIR: dir }) }).toString();
+  assert.match(out, /Sicherung erstellt: .*\(\d+ Konten, Prüfung: ok\)/);
+  const files = fs.readdirSync(path.join(dir, 'backups'));
+  assert.equal(files.length, 1);
+  assert.equal(fs.statSync(path.join(dir, 'backups', files[0])).mode & 0o077, 0);
 });

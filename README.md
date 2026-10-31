@@ -28,7 +28,11 @@ Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ord
 | `DATA_DIR` | `./server-data` | Ort der Datenbank |
 | `REGISTRATION` | `open` | `closed` = keine neuen Konten (z. B. nur für dich und Freunde) |
 | `TRUST_PROXY` | `0` | `1` hinter einem Reverse-Proxy mit HTTPS (Render, Fly, Caddy, nginx). Nötig für `Secure`-Cookies und korrekte IP-Begrenzung |
-| `SESSION_DAYS` | `30` | Laufzeit einer Anmeldung |
+| `SESSION_DAYS` | `30` | Laufzeit einer Anmeldung ab der letzten Nutzung |
+| `SESSION_MAX_DAYS` | `90` | Höchstdauer einer Anmeldung, danach immer neu anmelden |
+| `API_RATE_PER_MIN` | `300` | Anfragen pro Minute und IP bzw. Konto |
+| `KDF_CONCURRENCY` | `4` | Gleichzeitige Passwort-Berechnungen (scrypt, je 32 MB RAM); weitere warten in einer Schlange |
+| `BACKUP_KEEP` | `14` | Anzahl aufbewahrter Datenbank-Sicherungen (`npm run backup`) |
 | `AUTOPOT_SECRET` | – | Mind. 32 Zeichen. Ohne Angabe wird `server-secret.key` erzeugt. **Nie nachträglich ändern**, sonst findet der Server die Konten nicht mehr |
 
 ## Online stellen
@@ -39,7 +43,15 @@ Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ord
 - **Render.com:** `render.yaml` liegt bei (Docker + persistenter Speicher). Persistenter Speicher braucht einen bezahlten Plan; ohne ihn gehen bei jedem Neustart alle Konten verloren.
 - **Nur statisch (GitHub Pages):** funktioniert ebenfalls, dann aber **ohne Konten** – die App merkt das und blendet den Konto-Knopf aus.
 
-Vor dem Livegang: `impressum.html` und `datenschutz.html` mit echten Angaben füllen (Platzhalter in eckigen Klammern) und rechtlich prüfen lassen.
+Vor dem Livegang: `impressum.html`, `datenschutz.html` und `.well-known/security.txt` mit echten Angaben füllen (Platzhalter in eckigen Klammern) und rechtlich prüfen lassen.
+
+### Datenbank sichern
+
+```
+npm run backup                    # konsistente Kopie nach server-data/backups/, mit Integritätsprüfung
+```
+
+Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. Die Sicherung ist genauso verschlüsselt wie die Datenbank; zum Anmelden wird zusätzlich `server-secret.key` bzw. `AUTOPOT_SECRET` gebraucht – getrennt aufbewahren. Per Cron z. B. täglich: `0 3 * * * cd /app && npm run backup`.
 
 ## Sicherheit
 
@@ -51,8 +63,13 @@ Vor dem Livegang: `impressum.html` und `datenschutz.html` mit echten Angaben fü
 | E-Mail-Adressen | nur als HMAC-SHA-256-Blindindex gespeichert, nie im Klartext |
 | Sitzungen | 256-Bit-Token, Cookie `HttpOnly`, `SameSite=Strict`, `Secure` + `__Host-`-Präfix unter HTTPS |
 | CSRF | SameSite-Cookie + Pflicht-Header `X-Requested-With` + Origin-Prüfung |
-| Missbrauch | Begrenzung pro IP (Registrierung, Login, Wiederherstellung), Kontosperre 15 min nach 8 Fehlversuchen, gleiche Antwortzeit für unbekannte Konten |
-| Browser | strikte CSP (`script-src 'self'`, keine Inline-Skripte), `nosniff`, `frame-ancestors 'none'`, HSTS unter HTTPS, keine Drittanbieter |
+| Zwei-Faktor | Optional per TOTP (RFC 6238, jede Authenticator-App), Schlüssel AES-verschlüsselt mit dem Nutzerschlüssel, ±30 s Toleranz, jeder Code nur einmal gültig. QR-Code wird ohne Fremdbibliothek im Browser erzeugt |
+| Missbrauch | Begrenzung pro IP und Konto (alle Anfragen, Registrierung, Login, Wiederherstellung), Sperre 15 min nach 8 Fehlversuchen pro Konto **und IP** sowie nach 40 Fehlversuchen pro Konto insgesamt – ein Angreifer kann die Inhaberin so nicht aussperren. Gleiche Antwortzeit für unbekannte Konten. Warteschlange für scrypt gegen Überlastung |
+| Geräte & Protokoll | Liste aller Anmeldungen mit (verschlüsselter) Gerätebezeichnung, einzelne oder alle anderen Geräte abmelden; Sicherheitsprotokoll (letzte 60 Ereignisse, ohne IP) mit Warnung bei Fehlversuchen. Sitzungen laufen nach 30 Tagen Inaktivität, spätestens nach 90 Tagen ab |
+| Passwörter (Regeln) | mind. 10 Zeichen, keine Allerweltspasswörter, nicht die E-Mail-Adresse; Stärkeanzeige beim Eintippen |
+| Backups | Optional mit eigenem Passwort verschlüsselt (PBKDF2-SHA-256 mit 600 000 Runden, AES-256-GCM, im Browser per Web Crypto) |
+| Browser | strikte CSP (`script-src 'self'`, keine Inline-Skripte), `nosniff`, `frame-ancestors 'none'`, HSTS unter HTTPS, `Permissions-Policy`, keine Drittanbieter |
+| Anfragen | nur JSON (`415` sonst), Größenlimits, Prüfung von `Origin` und `Sec-Fetch-Site`, URL-Länge begrenzt, Zeitlimits gegen langsame Verbindungen |
 | Dateifreigabe | Server liefert nur eine feste Liste öffentlicher Dateien aus (Datenbank, Server-Code, Tests sind nicht abrufbar) |
 | Datenschutz | Export aller Daten und endgültiges Löschen des Kontos in der App |
 
@@ -67,16 +84,16 @@ Vor dem Livegang: `impressum.html` und `datenschutz.html` mit echten Angaben fü
 
 ## API (kurz)
 
-`POST /api/register | /api/login | /api/recover | /api/logout | /api/password`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `DELETE /api/account`, `GET /api/health | /api/config`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
+`POST /api/register | /api/login (optional `totp`) | /api/recover | /api/logout | /api/password`, `POST /api/2fa/setup | /api/2fa/enable | /api/2fa/disable`, `GET /api/sessions`, `DELETE /api/sessions/:id | /api/sessions/others`, `GET /api/security-log`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `DELETE /api/account`, `GET /api/health | /api/config`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
 
 ## Funktionen der App
 
-Übersicht mit Tageszähler, Phasenleiste, Grow-Score und Messserie · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, VPD-Heatmap) · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
+Übersicht mit Tageszähler, Phasenleiste, Grow-Score, Messserie, **Ernteprognose** (Blütewoche, voraussichtlicher Erntetermin) und **Tipp passend zur Phase** · **Wochenbericht** (Ø-Werte mit Trend zur Vorwoche, Zuwachs, Zielquote) · „Letzte Werte übernehmen“ beim Eintragen, Löschen mit **Rückgängig** · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, **Stromkosten**, VPD-Heatmap) · **Wissen**: Richtwerte-Tabelle je Phase, Nährstoff-Lexikon (mobil/immobil, Anzeichen, Ursachen), Glossar · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos, optional passwortverschlüsselt), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
 
-### Datenformat (Schema v4)
+### Datenformat (Schema v5)
 
 ```
-{ version, settings{name, phase, startDate, phaseStart, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
+{ version, settings{name, phase, startDate, phaseStart, flowerStart, flowerWeeks, lightHours, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
   entries[{id, date, phase, ec, ph, waterTemp, airTemp, humidity, ppfd, use, height, tags, note, hasPhoto}],
   recipes[], events[], reminders[], checks{setup{}, week{}},
   harvest{date, wet, dry, watt, note}, archive[{id, name, start, end, entries, days, wet, dry, watt, avgEc, avgPh}] }
@@ -91,9 +108,9 @@ npm install            # nur für die Browser-Tests (Playwright)
 npm test               # Server-Tests, App-Tests, End-to-End mit zwei Geräten
 ```
 
-- `tests/server.test.js` – Registrierung, Login, Sperre, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Export, Löschen
-- `tests/smoke.test.js` – App und Anleitung (Import/Export, Fotos, Diagramme, Rechner, Offline, Mobilansicht)
-- `tests/e2e.test.js` – Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Passwortwechsel, Abmelden, Konto löschen
+- `tests/server.test.js` (15) – Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
+- `tests/smoke.test.js` (102) – App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
+- `tests/e2e.test.js` (38) – Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
 
 ## Richtwerte
 

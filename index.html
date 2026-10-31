@@ -58,6 +58,11 @@
     <div class="card rv"><div class="ic">💧</div><h3>Tank-Assistent</h3><p>Restlaufzeit, Tankwechsel-Intervall und Warnungen, bevor der Tank leer ist.</p></div>
     <div class="card rv"><div class="ic">🌾</div><h3>Ernte &amp; Archiv</h3><p>Ertrag, Trocknungsverlust und g/W. Grows abschließen, archivieren und neu starten.</p></div>
     <div class="card rv"><div class="ic">⏰</div><h3>Erinnerungen</h3><p>Aufgaben mit Wiederholung, auch als Kalenderdatei (.ics) für dein Handy-Kalender.</p></div>
+    <div class="card rv"><div class="ic">🌸</div><h3>Ernteprognose</h3><p>Blütebeginn und Blütedauer der Sorte – die App zeigt Blütewoche und voraussichtlichen Erntetermin.</p></div>
+    <div class="card rv"><div class="ic">📊</div><h3>Wochenbericht</h3><p>Durchschnittswerte der Woche im Vergleich zur Vorwoche, mit Trend, Zuwachs und Zielquote.</p></div>
+    <div class="card rv"><div class="ic">📚</div><h3>Wissen eingebaut</h3><p>Richtwerte je Phase, Nährstoff-Lexikon mit Mangelbildern, Glossar und ein Tipp passend zur Phase.</p></div>
+    <div class="card rv"><div class="ic">💶</div><h3>Stromkosten</h3><p>Was kostet dein Grow pro Tag, Monat und bis zur Ernte? Einfach Watt, Lichtstunden und Strompreis eintragen.</p></div>
+    <div class="card rv"><div class="ic">🔐</div><h3>Zwei-Faktor &amp; Geräte</h3><p>Optionale Anmeldung mit Authenticator-App, Übersicht aller angemeldeten Geräte und Sicherheitsprotokoll.</p></div>
     <div class="card rv"><div class="ic">📴</div><h3>Auch offline</h3><p>Als App installierbar und ohne Netz nutzbar. Änderungen werden später automatisch synchronisiert.</p></div>
   </div>
 </section>
@@ -80,7 +85,10 @@
         <li><span><b>Verschlüsselt gespeichert.</b> Messwerte, Notizen und Fotos liegen mit AES-256-GCM verschlüsselt in der Datenbank.</span></li>
         <li><span><b>Eigener Schlüssel pro Nutzer.</b> Er wird aus deinem Passwort geschützt. Ohne Passwort, Wiederherstellungscode oder aktive Sitzung ist die Datenbank allein wertlos.</span></li>
         <li><span><b>Keine Klartext-Adressen.</b> Deine E-Mail steht nur als Prüfwert (HMAC) in der Datenbank, nicht im Klartext.</span></li>
-        <li><span><b>Passwörter nie im Klartext.</b> Gesichert mit scrypt, mit Sperre nach Fehlversuchen und Begrenzung der Anfragen.</span></li>
+        <li><span><b>Passwörter nie im Klartext.</b> Gesichert mit scrypt, mit Sperre nach Fehlversuchen (pro Konto und Netzwerk) und Begrenzung der Anfragen.</span></li>
+        <li><span><b>Zwei-Faktor-Anmeldung.</b> Optional mit jeder Authenticator-App; der geheime Schlüssel liegt ebenfalls verschlüsselt vor.</span></li>
+        <li><span><b>Volle Kontrolle.</b> Angemeldete Geräte einsehen und aus der Ferne abmelden, Sicherheitsprotokoll mit Warnung bei Fehlversuchen.</span></li>
+        <li><span><b>Verschlüsselte Backups.</b> Backup-Dateien lassen sich zusätzlich mit eigenem Passwort sichern (AES-256, PBKDF2).</span></li>
         <li><span><b>Keine Werbung, kein Tracking.</b> Keine Cookies außer dem Anmelde-Cookie, keine Drittanbieter-Skripte.</span></li>
         <li><span><b>Export und Löschen jederzeit.</b> Alle Daten als Datei herunterladen oder das Konto samt Daten endgültig löschen.</span></li>
       </ul>

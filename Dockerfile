@@ -7,10 +7,11 @@ ENV NODE_ENV=production \
 WORKDIR /app
 # Nur die öffentlich ausgelieferten Dateien und den Server kopieren
 COPY server ./server
-COPY index.html app.html anleitung.html datenschutz.html impressum.html \
-     app.js app.css anleitung.js theme-init.js site.css site.js sw.js manifest.webmanifest ./
+COPY index.html app.html anleitung.html datenschutz.html impressum.html robots.txt \
+     app.js app.css qr.js anleitung.js theme-init.js site.css site.js sw.js manifest.webmanifest ./
 COPY icons ./icons
 COPY img ./img
+COPY .well-known ./.well-known
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 VOLUME ["/data"]

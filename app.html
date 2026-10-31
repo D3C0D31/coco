@@ -26,7 +26,7 @@
   </div>
   <nav class="tabs" aria-label="Bereiche">
     <a href="#dashboard">Übersicht</a><a href="#log">Protokoll</a><a href="#charts">Diagramme</a><a href="#gallery">Galerie</a>
-    <a href="#calc">Rechner</a><a href="#harvest">Ernte</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
+    <a href="#calc">Rechner</a><a href="#wissen">Wissen</a><a href="#harvest">Ernte</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
     <a href="#reminders">Erinnerungen</a><a href="#diagnose">Diagnose</a><a href="#checks">Checklisten</a>
   </nav>
 </header>
@@ -39,6 +39,7 @@
       <h2 id="heroName">AutoPot Grow</h2>
       <p class="heroDay" id="heroDay">Startdatum setzen</p>
       <p class="sub" id="heroSub"></p>
+      <p class="sub heroFlower" id="heroFlower"></p>
       <ol class="steps" id="phaseSteps" aria-label="Phasen"></ol>
       <div class="row no-print">
         <a class="btn primary" href="#log" id="heroAdd">＋ Messung eintragen</a>
@@ -58,6 +59,7 @@
   </div>
 
   <div id="findings"></div>
+  <div id="tipBox"></div>
   <div class="grid cards">
     <div class="card" id="cardPh"><h3>Tank-pH</h3><div class="value" id="kPh">–</div><p class="sub" id="kPhSub"></p><div id="gPh"></div><div id="spPh"></div></div>
     <div class="card" id="cardEc"><h3>Tank-EC</h3><div class="value" id="kEc">–</div><p class="sub" id="kEcSub"></p><div id="gEc"></div><div id="spEc"></div></div>
@@ -65,6 +67,10 @@
     <div class="card" id="cardTank"><h3>Tank-Restlaufzeit</h3><div class="value" id="kTank">–</div><p class="sub" id="kTankSub"></p><div id="gTank"></div></div>
     <div class="card"><h3>Letzter Eintrag</h3><div class="value" id="kLast">–</div><p class="sub" id="kLastSub"></p></div>
     <div class="card"><h3>Montage / Woche</h3><div class="value" id="kChecks">–</div><p class="sub">erledigte Checklistenpunkte</p></div>
+  </div>
+  <div class="panel" style="background:var(--glass)">
+    <h3>📊 Wochenbericht <span class="sub">(letzte 7 Tage im Vergleich zur Vorwoche)</span></h3>
+    <div id="weekly"></div>
   </div>
   <div class="panel" style="background:var(--glass)">
     <h3>Aktueller Grow</h3>
@@ -76,6 +82,9 @@
       <div><label for="sTankRest">Aktuell im Tank (L)</label><input id="sTankRest" type="number" min="0" step="0.5"></div>
       <div><label for="sDailyUse">Verbrauch pro Tag (L)</label><input id="sDailyUse" type="number" min="0" step="0.1"></div>
       <div><label for="sInterval">Tankwechsel alle (Tage)</label><input id="sInterval" type="number" min="1" step="1"></div>
+      <div><label for="sLight">Lichtstunden pro Tag</label><input id="sLight" type="number" min="1" max="24" step="0.5"></div>
+      <div><label for="sFlowerStart">Blütebeginn</label><input id="sFlowerStart" type="date"></div>
+      <div><label for="sFlowerWeeks">Blütedauer laut Sorte (Wochen)</label><input id="sFlowerWeeks" type="number" min="4" max="20" step="1"></div>
     </div>
     <p class="sub" id="phaseHint"></p>
     <p class="sub" id="tankInfo"></p>
@@ -110,6 +119,7 @@
     <div class="row">
       <button id="saveEntry" class="btn primary" type="button">Eintrag speichern</button>
       <button id="cancelEdit" class="btn hidden" type="button">Bearbeitung abbrechen</button>
+      <button id="fillLast" class="btn" type="button">↺ Letzte Werte übernehmen</button>
       <button id="clearForm" class="btn" type="button">Formular leeren</button>
     </div>
   </div>
@@ -205,6 +215,14 @@
       <label for="dHours">Lichtstunden pro Tag</label><input id="dHours" type="number" step="0.5" value="18">
       <p id="dOut" style="margin:10px 0 0"></p>
     </div>
+    <div class="card"><h3>Stromkosten</h3>
+      <label for="pwWatt">Lampe (Watt laut Messung/Hersteller)</label><input id="pwWatt" type="number" min="0" step="5" value="250">
+      <label for="pwHours">Lichtstunden pro Tag</label><input id="pwHours" type="number" min="0" max="24" step="0.5" value="18">
+      <label for="pwExtra">Weitere Geräte rund um die Uhr (Watt)</label><input id="pwExtra" type="number" min="0" step="5" value="30">
+      <label for="pwPrice">Strompreis (€/kWh)</label><input id="pwPrice" type="number" min="0" step="0.01" value="0.35">
+      <p id="pwOut" style="margin:10px 0 0"></p>
+      <small class="hint">Lüfter, Pumpen usw. unter „weitere Geräte“ zusammenzählen. Grobe Schätzung bei gleichbleibendem Betrieb.</small>
+    </div>
   </div>
   <div class="card" style="margin-top:14px">
     <div class="head" style="margin-bottom:6px"><h3 style="margin:0">VPD-Heatmap</h3>
@@ -212,6 +230,18 @@
     <div class="table-wrap"><table class="heat" id="vpdMap" style="min-width:0"></table></div>
     <div class="legend"><span><i style="background:#2f6fc0"></i>zu niedrig</span><span><i style="background:#43c463"></i>im Ziel (Phase)</span><span><i style="background:#d9711b"></i>zu hoch</span><span><i style="background:#b8322f"></i>deutlich zu hoch</span><span id="heatNote"></span></div>
   </div>
+</section>
+
+<section id="wissen">
+  <h2>Wissen</h2>
+  <h3>Richtwerte je Phase <span class="sub">(aus der Anleitung, Kap. 7, 9 und 10 – aktuelle Phase hervorgehoben)</span></h3>
+  <div class="table-wrap"><table class="mini ref" id="refTable"></table></div>
+  <div class="head" style="margin-top:20px"><h3 style="margin:0">Nährstoff-Lexikon</h3>
+    <div style="min-width:220px"><label for="nutriSearch" class="hidden">Nährstoffe durchsuchen</label><input id="nutriSearch" type="search" placeholder="Suchen, z. B. „gelb“, „Spitzen“ …"></div></div>
+  <p class="sub" style="margin:0 0 10px">Viele „Mängel“ in Coco sind in Wahrheit ein pH-Problem: Erst Tank-pH (5,8–6,2) und EC prüfen, dann gezielt nachbessern. Der Diagnose-Assistent hilft bei der Eingrenzung.</p>
+  <div id="nutriList" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>
+  <h3 style="margin-top:20px">Glossar</h3>
+  <dl id="glossar" class="glossar"></dl>
 </section>
 
 <section id="harvest">
@@ -308,6 +338,12 @@
   <div class="dh"><h3 id="dataTitle">Daten &amp; Sicherung</h3><button class="btn small" type="button" data-close="dataDlg" aria-label="Schließen">✕</button></div>
   <div class="db">
     <p class="sub" id="backupState" style="margin:0 0 4px"></p>
+    <label class="check" style="border:0;padding:0"><input id="bkEncrypt" type="checkbox"><span>Backup mit Passwort verschlüsseln (AES-256)</span></label>
+    <div id="bkPwWrap" class="acct-form hidden" style="margin:0">
+      <input id="bkPw" type="password" autocomplete="new-password" placeholder="Backup-Passwort (mind. 8 Zeichen)" aria-label="Backup-Passwort">
+      <input id="bkPw2" type="password" autocomplete="new-password" placeholder="Passwort wiederholen" aria-label="Backup-Passwort wiederholen">
+      <small class="hint" style="margin:0">Ohne dieses Passwort lässt sich das Backup nicht mehr öffnen.</small>
+    </div>
     <button class="btn block" id="backupJson" type="button">💾 Backup (JSON, mit Fotos)</button>
     <button class="btn block" id="exportCsv" type="button">📊 CSV exportieren</button>
     <label class="btn block" for="importFile" style="margin:0">📥 Import (JSON oder CSV)<input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" class="hidden"></label>
@@ -329,11 +365,12 @@
       <form id="loginForm" data-tabpane="login" class="acct-form">
         <div><label for="liEmail">E-Mail</label><input id="liEmail" name="email" type="email" autocomplete="username" required maxlength="254"></div>
         <div><label for="liPw">Passwort</label><input id="liPw" name="password" type="password" autocomplete="current-password" required maxlength="200"></div>
+        <div id="liTotpWrap" class="hidden"><label for="liTotp">Code aus der Authenticator-App</label><input id="liTotp" name="totp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" placeholder="123456"></div>
         <button class="btn primary block" type="submit">Anmelden</button>
       </form>
       <form id="registerForm" data-tabpane="register" class="acct-form hidden">
         <div><label for="reEmail">E-Mail</label><input id="reEmail" name="email" type="email" autocomplete="username" required maxlength="254"></div>
-        <div><label for="rePw">Passwort (mind. 10 Zeichen)</label><input id="rePw" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
+        <div><label for="rePw">Passwort (mind. 10 Zeichen)</label><input id="rePw" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="200"><div class="pwm" data-pwmeter="rePw"><i></i><span></span></div></div>
         <div><label for="rePw2">Passwort wiederholen</label><input id="rePw2" name="password2" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
         <label class="check"><input name="consent" type="checkbox" required><span>Ich habe die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen.</span></label>
         <button class="btn primary block" type="submit">Konto erstellen</button>
@@ -342,7 +379,7 @@
       <form id="recoverForm" data-tabpane="recover" class="acct-form hidden">
         <div><label for="rcEmail">E-Mail</label><input id="rcEmail" name="email" type="email" autocomplete="username" required maxlength="254"></div>
         <div><label for="rcCode">Wiederherstellungscode</label><input id="rcCode" name="recoveryCode" type="text" autocomplete="off" required maxlength="60" placeholder="XXXX-XXXX-XXXX-…" spellcheck="false"></div>
-        <div><label for="rcPw">Neues Passwort</label><input id="rcPw" name="newPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
+        <div><label for="rcPw">Neues Passwort</label><input id="rcPw" name="newPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="200"><div class="pwm" data-pwmeter="rcPw"><i></i><span></span></div></div>
         <button class="btn primary block" type="submit">Passwort zurücksetzen</button>
       </form>
       <p id="acctMsg" class="sub acct-msg" role="alert"></p>
@@ -360,11 +397,42 @@
       <p class="sub" id="acctSince" style="margin:0 0 4px"></p>
       <button class="btn block" id="syncNow" type="button">🔄 Jetzt synchronisieren</button>
       <button class="btn block" id="cloudExport" type="button">📦 Alle Cloud-Daten exportieren</button>
+      <details class="acct-det" id="tfaBox"><summary>🔐 Zwei-Faktor-Anmeldung</summary>
+        <p class="sub" id="tfaState" style="margin:8px 0"></p>
+        <button class="btn primary" id="tfaStart" type="button">Jetzt einrichten</button>
+        <div id="tfaSetup" class="hidden">
+          <ol class="sub steps-list">
+            <li>Authenticator-App öffnen (z. B. Aegis, Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden).</li>
+            <li>QR-Code scannen – oder auf dem Handy <a id="tfaLink" href="#">direkt in der App öffnen</a> – oder den Schlüssel von Hand eingeben.</li>
+            <li>Den angezeigten 6-stelligen Code unten eintragen.</li>
+          </ol>
+          <div class="qrbox" id="tfaQr"></div>
+          <p class="sub" style="margin:6px 0">Schlüssel: <code id="tfaSecret" class="secret"></code></p>
+          <form id="tfaEnableForm" class="acct-form">
+            <div><label for="tfaCode">6-stelliger Code</label><input id="tfaCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+            <div class="row" style="margin:0"><button class="btn primary" type="submit">Aktivieren</button><button class="btn" id="tfaCancel" type="button">Abbrechen</button></div>
+          </form>
+        </div>
+        <form id="tfaOffForm" class="acct-form hidden">
+          <input name="u" type="text" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
+          <div><label for="tfaOffPw">Passwort</label><input id="tfaOffPw" name="password" type="password" autocomplete="current-password" required maxlength="200"></div>
+          <div><label for="tfaOffCode">Aktueller Code</label><input id="tfaOffCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></div>
+          <button class="btn danger" type="submit">Zwei-Faktor-Anmeldung deaktivieren</button>
+        </form>
+        <small class="hint">Handy verloren? Mit dem Wiederherstellungscode („Passwort vergessen“) kommst du wieder hinein; die Zwei-Faktor-Anmeldung wird dabei zurückgesetzt.</small>
+      </details>
+      <details class="acct-det"><summary>💻 Angemeldete Geräte <span class="sub" id="sessCount"></span></summary>
+        <div id="sessList"></div>
+        <button class="btn small" id="sessOthers" type="button">Alle anderen Geräte abmelden</button>
+      </details>
+      <details class="acct-det"><summary>📜 Sicherheitsprotokoll</summary>
+        <div id="secLog" class="seclog"></div>
+      </details>
       <details class="acct-det"><summary>Passwort ändern</summary>
         <form id="pwForm" class="acct-form">
           <input name="u" type="text" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
           <div><label for="pwCur">Aktuelles Passwort</label><input id="pwCur" name="currentPassword" type="password" autocomplete="current-password" required maxlength="200"></div>
-          <div><label for="pwNew">Neues Passwort</label><input id="pwNew" name="newPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
+          <div><label for="pwNew">Neues Passwort</label><input id="pwNew" name="newPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="200"><div class="pwm" data-pwmeter="pwNew"><i></i><span></span></div></div>
           <div><label for="pwNew2">Neues Passwort wiederholen</label><input id="pwNew2" name="newPassword2" type="password" autocomplete="new-password" required minlength="10" maxlength="200"></div>
           <button class="btn primary" type="submit">Passwort ändern</button>
         </form>
@@ -373,6 +441,7 @@
         <form id="delForm" class="acct-form">
           <p class="sub" style="margin:0">Löscht dein Konto und alle Cloud-Daten (auch Fotos) unwiderruflich.</p>
           <div><label for="delPw">Passwort zur Bestätigung</label><input id="delPw" name="password" type="password" autocomplete="current-password" required maxlength="200"></div>
+          <div id="delCodeWrap" class="hidden"><label for="delCode">Code aus der Authenticator-App</label><input id="delCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7"></div>
           <button class="btn danger" type="submit">Konto endgültig löschen</button>
         </form>
       </details>
@@ -380,10 +449,18 @@
     </div>
   </div>
 </dialog>
+<dialog id="pwAsk" aria-labelledby="pwAskTitle">
+  <div class="dh"><h3 id="pwAskTitle">Passwort</h3></div>
+  <form class="db" id="pwAskForm">
+    <p class="sub" id="pwAskHint" style="margin:0"></p>
+    <input id="pwAskInput" type="password" autocomplete="off" aria-label="Passwort" required>
+    <div class="row"><button class="btn primary" id="pwAskOk" type="submit">Öffnen</button><button class="btn" id="pwAskCancel" type="button">Abbrechen</button></div>
+  </form>
+</dialog>
 <dialog id="moreSheet" aria-labelledby="moreTitle">
   <div class="dh"><h3 id="moreTitle">Alle Bereiche</h3><button class="btn small" type="button" data-close="moreSheet" aria-label="Schließen">✕</button></div>
   <div class="db"><div class="sheetgrid">
-    <a href="#gallery"><b>🖼</b>Galerie</a><a href="#harvest"><b>🌾</b>Ernte</a><a href="#recipes"><b>🧪</b>Rezepte</a>
+    <a href="#gallery"><b>🖼</b>Galerie</a><a href="#wissen"><b>📚</b>Wissen</a><a href="#harvest"><b>🌾</b>Ernte</a><a href="#recipes"><b>🧪</b>Rezepte</a>
     <a href="#timeline"><b>🗓</b>Timeline</a><a href="#reminders"><b>⏰</b>Erinnerungen</a><a href="#diagnose"><b>🩺</b>Diagnose</a>
     <a href="#checks"><b>✅</b>Checklisten</a><a href="anleitung.html"><b>📖</b>Anleitung</a><a href="#" data-open="dataDlg"><b>💾</b>Daten</a><a href="#" data-open="accountDlg"><b>👤</b>Konto</a>
   </div></div>
@@ -395,6 +472,7 @@
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="tip" class="hidden" role="tooltip"></div>
 
+<script src="qr.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

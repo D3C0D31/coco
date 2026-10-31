@@ -6,6 +6,7 @@ const path = require('path');
 const zlib = require('zlib');
 const crypto = require('crypto');
 const C = require('./crypto');
+const T = require('./totp');
 const { openDb, loadPepper } = require('./db');
 
 const ROOT = path.join(__dirname, '..');
@@ -15,10 +16,17 @@ const CFG = {
   dataDir: process.env.DATA_DIR || path.join(ROOT, 'server-data'),
   registration: (process.env.REGISTRATION || 'open') !== 'closed',
   trustProxy: process.env.TRUST_PROXY === '1',
-  sessionDays: Number(process.env.SESSION_DAYS || 30),
+  sessionDays: Number(process.env.SESSION_DAYS || 30),     /* gleitend: verlängert sich bei Nutzung */
+  sessionMaxDays: Number(process.env.SESSION_MAX_DAYS || 90), /* absolut: danach immer neu anmelden */
+  apiPerMinute: Number(process.env.API_RATE_PER_MIN || 300),
+  registerPerHour: 5,     /* pro IP */
+  loginPer10Min: 20,      /* pro IP */
+  kdfConcurrency: Number(process.env.KDF_CONCURRENCY || 4),
+  kdfQueue: 64,
   maxPhotosPerUser: 800,
   maxStateBytes: 3 * 1024 * 1024,
-  maxPhotoBytes: 700 * 1024
+  maxPhotoBytes: 700 * 1024,
+  logLimit: 60
 };
 const DAY = 864e5;
 
@@ -31,14 +39,18 @@ function createServer(overrides = {}) {
     userById: db.prepare('SELECT * FROM users WHERE id = ?'),
     addUser: db.prepare('INSERT INTO users (email_hash, salt, verifier, wrap_dek, rec_salt, wrap_dek_rec, created_at) VALUES (?,?,?,?,?,?,?)'),
     updUser: db.prepare('UPDATE users SET salt=?, verifier=?, wrap_dek=?, rec_salt=?, wrap_dek_rec=? WHERE id=?'),
+    setTotp: db.prepare('UPDATE users SET totp_wrapped=?, totp_step=? WHERE id=?'),
+    setTotpStep: db.prepare('UPDATE users SET totp_step=? WHERE id=?'),
     delUser: db.prepare('DELETE FROM users WHERE id = ?'),
-    addSession: db.prepare('INSERT INTO sessions (token_hash, user_id, dek_wrapped, created_at, last_seen, expires_at) VALUES (?,?,?,?,?,?)'),
+    addSession: db.prepare('INSERT INTO sessions (token_hash, user_id, dek_wrapped, created_at, last_seen, expires_at, absolute_expires, label) VALUES (?,?,?,?,?,?,?,?)'),
     getSession: db.prepare('SELECT * FROM sessions WHERE token_hash = ?'),
+    listSessions: db.prepare('SELECT token_hash, created_at, last_seen, label FROM sessions WHERE user_id = ? ORDER BY last_seen DESC'),
     touchSession: db.prepare('UPDATE sessions SET last_seen=?, expires_at=? WHERE token_hash=?'),
     delSession: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
+    delSessionById: db.prepare('DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 24) = ? AND token_hash != ?'),
     delOtherSessions: db.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?'),
     delUserSessions: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
-    purgeSessions: db.prepare('DELETE FROM sessions WHERE expires_at < ?'),
+    purgeSessions: db.prepare('DELETE FROM sessions WHERE expires_at < ? OR (absolute_expires > 0 AND absolute_expires < ?)'),
     getDoc: db.prepare('SELECT version, blob, updated_at FROM docs WHERE user_id=? AND kind=?'),
     putDoc: db.prepare('INSERT INTO docs (user_id, kind, version, blob, updated_at) VALUES (?,?,?,?,?) ON CONFLICT(user_id, kind) DO UPDATE SET version=excluded.version, blob=excluded.blob, updated_at=excluded.updated_at'),
     listPhotos: db.prepare('SELECT id FROM photos WHERE user_id=? ORDER BY id'),
@@ -46,31 +58,65 @@ function createServer(overrides = {}) {
     getPhoto: db.prepare('SELECT blob FROM photos WHERE user_id=? AND id=?'),
     putPhoto: db.prepare('INSERT INTO photos (user_id, id, blob, updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id, id) DO UPDATE SET blob=excluded.blob, updated_at=excluded.updated_at'),
     delPhoto: db.prepare('DELETE FROM photos WHERE user_id=? AND id=?'),
-    allPhotos: db.prepare('SELECT id, blob FROM photos WHERE user_id=?')
+    allPhotos: db.prepare('SELECT id, blob FROM photos WHERE user_id=?'),
+    addEvent: db.prepare('INSERT INTO sec_events (user_id, type, at) VALUES (?,?,?)'),
+    listEvents: db.prepare('SELECT type, at FROM sec_events WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?'),
+    trimEvents: db.prepare('DELETE FROM sec_events WHERE user_id = ? AND id NOT IN (SELECT id FROM sec_events WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?)')
   };
+  const logEvent = (userId, type) => { try { const now = Date.now(); q.addEvent.run(userId, type, now); q.trimEvents.run(userId, userId, cfg.logLimit); } catch (e) { /* Protokoll darf nie den Ablauf stören */ } };
 
   /* ---------- Begrenzungen (im Speicher) ---------- */
-  const hits = new Map();   /* IP -> Zeitstempel */
-  const fails = new Map();  /* E-Mail-Hash -> {n, until} */
+  const hits = new Map();   /* Schlüssel -> Zeitstempel */
+  const fails = new Map();  /* Schlüssel -> {n, first, until} */
   const rateOk = (key, max, windowMs) => {
     const now = Date.now(), arr = (hits.get(key) || []).filter(t => now - t < windowMs);
+    if (arr.length >= max) { hits.set(key, arr); return false; }
     arr.push(now); hits.set(key, arr);
-    return arr.length <= max;
+    return true;
   };
-  const locked = h => { const f = fails.get(h); return f && f.until > Date.now(); };
-  const failed = h => { const f = fails.get(h) || { n: 0, until: 0 }; f.n++; if (f.n >= 8) { f.until = Date.now() + 15 * 60e3; f.n = 0; } fails.set(h, f); };
-  const okLogin = h => fails.delete(h);
+  const locked = key => { const f = fails.get(key); return !!(f && f.until > Date.now()); };
+  /* Fehlversuch zählen: nach `max` Fehlern im Fenster wird der Schlüssel 15 min gesperrt */
+  const failed = (key, max, windowMs = 3600e3) => {
+    const now = Date.now();
+    let f = fails.get(key);
+    if (!f || now - f.first > windowMs) f = { n: 0, first: now, until: 0 };
+    f.n++;
+    if (f.n >= max) { f.until = now + 15 * 60e3; f.n = 0; f.first = now; }
+    fails.set(key, f);
+  };
+  /* Sperre pro (Konto + IP) – und zusätzlich pro Konto mit höherer Schwelle.
+     So kann ein Angreifer von einer IP aus dein Konto nicht dauerhaft für dich sperren. */
+  const loginKeys = (eh, ip) => [`${eh}|${ip}`, eh];
+  const isLocked = (eh, ip) => locked(`${eh}|${ip}`) || locked(eh);
+  const loginFailed = (eh, ip) => { failed(`${eh}|${ip}`, 8); failed(eh, 40); };
+  const loginOk = (eh, ip) => loginKeys(eh, ip).forEach(k => fails.delete(k));
+
+  /* Schlüsselableitung (scrypt, 32 MB RAM) begrenzen: schützt vor Überlastung durch Massen-Logins */
+  let kdfActive = 0;
+  const kdfWaiting = [];
+  async function kdf(fn) {
+    if (kdfActive >= cfg.kdfConcurrency) {
+      if (kdfWaiting.length >= cfg.kdfQueue) throw err(503, 'busy', 'Der Server ist gerade ausgelastet. Bitte gleich noch einmal versuchen.');
+      await new Promise(r => kdfWaiting.push(r));
+    }
+    kdfActive++;
+    try { return await fn(); }
+    finally { kdfActive--; const next = kdfWaiting.shift(); if (next) next(); }
+  }
+
+  const pendingTotp = new Map(); /* Sitzung -> {secret, until} während der Einrichtung */
   const sweep = setInterval(() => {
     const now = Date.now();
-    q.purgeSessions.run(now);
+    q.purgeSessions.run(now, now);
     for (const [k, v] of hits) { const a = v.filter(t => now - t < 3600e3); a.length ? hits.set(k, a) : hits.delete(k); }
-    for (const [k, f] of fails) if (f.until < now && f.n === 0) fails.delete(k);
-  }, 600e3);
+    for (const [k, f] of fails) if (f.until < now && now - f.first > 3600e3) fails.delete(k);
+    for (const [k, p] of pendingTotp) if (p.until < now) pendingTotp.delete(k);
+  }, 300e3);
   sweep.unref();
 
   /* ---------- Helfer ---------- */
-  class HttpError extends Error { constructor(status, code, message) { super(message); this.status = status; this.code = code; } }
-  const err = (s, c, m) => new HttpError(s, c, m);
+  class HttpError extends Error { constructor(status, code, message, extra) { super(message); this.status = status; this.code = code; this.extra = extra; } }
+  const err = (s, c, m, x) => new HttpError(s, c, m, x);
   const isSecure = req => !!req.socket.encrypted || (cfg.trustProxy && req.headers['x-forwarded-proto'] === 'https');
   const clientIp = req => (cfg.trustProxy && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '?';
   const cookieName = req => isSecure(req) ? '__Host-autopot' : 'autopot';
@@ -92,42 +138,57 @@ function createServer(overrides = {}) {
   const json = (res, status, body) => send(res, status, body, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   function readBody(req, limit) {
     return new Promise((resolve, reject) => {
+      const ct = String(req.headers['content-type'] || '');
+      if (req.headers['content-length'] && Number(req.headers['content-length']) > limit) { reject(err(413, 'too_large', 'Die Daten sind zu groß.')); return; }
       const chunks = []; let n = 0;
       req.on('data', c => { n += c.length; if (n > limit) { reject(err(413, 'too_large', 'Die Daten sind zu groß.')); req.destroy(); } else chunks.push(c); });
       req.on('end', () => {
         if (!n) return resolve({});
+        if (!/^application\/json\b/i.test(ct)) return reject(err(415, 'bad_type', 'Nur JSON wird angenommen.'));
         try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); resolve(v && typeof v === 'object' && !Array.isArray(v) ? v : {}); }
         catch (e) { reject(err(400, 'bad_json', 'Ungültige Anfrage.')); }
       });
       req.on('error', reject);
     });
   }
+  const str = (v, max = 200) => (typeof v === 'string' ? v.slice(0, max) : '');
   const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-  const COMMON = new Set(['passwort123', 'password123', '1234567890', 'qwertzuiop', 'qwertyuiop', 'password12', 'passwort12', 'abcdefghij', '0123456789', 'iloveyou12']);
-  function checkPassword(pw) {
+  const COMMON = new Set(['passwort123', 'password123', '1234567890', 'qwertzuiop', 'qwertyuiop', 'password12', 'passwort12', 'abcdefghij', '0123456789', 'iloveyou12', 'hallo12345', 'autopotgrow', 'autopot123', 'growgrow12', 'cannabis123', 'qwertz1234', 'asdfghjkl1', '1q2w3e4r5t', 'passwort1234', 'password1234']);
+  function checkPassword(pw, email) {
     if (typeof pw !== 'string' || pw.length < 10) throw err(400, 'weak_password', 'Das Passwort muss mindestens 10 Zeichen lang sein.');
     if (pw.length > 200) throw err(400, 'weak_password', 'Das Passwort ist zu lang (max. 200 Zeichen).');
-    if (COMMON.has(pw.toLowerCase()) || /^(.)\1+$/.test(pw)) throw err(400, 'weak_password', 'Dieses Passwort ist zu einfach.');
+    const low = pw.toLowerCase();
+    if (COMMON.has(low) || /^(.)\1+$/.test(pw) || new Set(pw).size < 5) throw err(400, 'weak_password', 'Dieses Passwort ist zu einfach.');
+    if (/^(?:0123456789|1234567890|abcdefghij)/.test(low)) throw err(400, 'weak_password', 'Dieses Passwort ist zu einfach.');
+    if (email) { const local = email.split('@')[0]; if (local.length >= 4 && low.includes(local)) throw err(400, 'weak_password', 'Das Passwort darf deine E-Mail-Adresse nicht enthalten.'); }
   }
   function checkEmail(email) {
-    if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) throw err(400, 'bad_email', 'Bitte eine gültige E-Mail-Adresse angeben.');
+    if (typeof email !== 'string' || email.length > 254 || !EMAIL_RE.test(email.trim())) throw err(400, 'bad_email', 'Bitte eine gültige E-Mail-Adresse angeben.');
     return email.trim().toLowerCase();
+  }
+  /* Grobe Gerätebezeichnung aus dem User-Agent (wird verschlüsselt gespeichert) */
+  function deviceLabel(ua) {
+    ua = String(ua || '');
+    const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    const o = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'unbekannt';
+    return `${b} · ${o}`;
   }
 
   async function startSession(req, res, userId, dek) {
     const token = crypto.randomBytes(32).toString('base64url'), now = Date.now();
-    q.addSession.run(C.sha256(Buffer.from(token)).toString('hex'), userId, C.seal(C.sessionKey(token), dek, 'sess'), now, now, now + cfg.sessionDays * DAY);
-    setCookie(res, req, token, cfg.sessionDays * 86400);
+    const exp = Math.min(now + cfg.sessionDays * DAY, now + cfg.sessionMaxDays * DAY);
+    q.addSession.run(C.sha256(Buffer.from(token)).toString('hex'), userId, C.seal(C.sessionKey(token), dek, 'sess'), now, now, exp, now + cfg.sessionMaxDays * DAY, C.seal(dek, Buffer.from(deviceLabel(req.headers['user-agent'])), `u${userId}:label`));
+    setCookie(res, req, token, Math.round((exp - now) / 1000));
   }
   /* Sitzung aus Cookie laden: liefert {userId, dek, tokenHash} oder wirft 401 */
   function auth(req) {
     const token = cookies(req)[cookieName(req)];
     if (!token || token.length > 100) throw err(401, 'unauthorized', 'Bitte anmelden.');
     const th = C.sha256(Buffer.from(token)).toString('hex'), s = q.getSession.get(th), now = Date.now();
-    if (!s || s.expires_at < now) throw err(401, 'unauthorized', 'Sitzung abgelaufen. Bitte neu anmelden.');
+    if (!s || s.expires_at < now || (s.absolute_expires && s.absolute_expires < now)) throw err(401, 'unauthorized', 'Sitzung abgelaufen. Bitte neu anmelden.');
     let dek;
     try { dek = C.open(C.sessionKey(token), s.dek_wrapped, 'sess'); } catch (e) { throw err(401, 'unauthorized', 'Sitzung ungültig.'); }
-    if (now - s.last_seen > 36e5) q.touchSession.run(now, now + cfg.sessionDays * DAY, th);
+    if (now - s.last_seen > 36e5) q.touchSession.run(now, Math.min(now + cfg.sessionDays * DAY, s.absolute_expires || Infinity), th);
     return { userId: s.user_id, dek, tokenHash: th };
   }
   function csrfCheck(req) {
@@ -135,74 +196,93 @@ function createServer(overrides = {}) {
     if (req.headers['x-requested-with'] !== 'autopot') throw err(403, 'csrf', 'Anfrage abgelehnt.');
     const o = req.headers.origin;
     if (o) { let h; try { h = new URL(o).host; } catch (e) { h = ''; } if (h !== req.headers.host) throw err(403, 'csrf', 'Anfrage abgelehnt.'); }
+    const site = req.headers['sec-fetch-site'];
+    if (site && !['same-origin', 'none'].includes(site)) throw err(403, 'csrf', 'Anfrage abgelehnt.');
   }
   const dummyRow = (async () => { const a = await C.createAccount('dummy-password-for-timing'); return a.row; })();
   const sealJson = (dek, obj, aad) => C.seal(dek, Buffer.from(JSON.stringify(obj)), aad);
   const openJson = (dek, blob, aad) => JSON.parse(C.open(dek, blob, aad).toString('utf8'));
   const PHOTO_RE = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
   const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+  const totpSecretOf = (user, dek) => (user.totp_wrapped ? C.open(dek, user.totp_wrapped, `u${user.id}:totp`) : null);
 
   /* ---------- API ---------- */
   async function api(req, res, url) {
-    const p = url.pathname, m = req.method;
+    const p = url.pathname, m = req.method, ip = clientIp(req);
+    if (!rateOk('api:' + ip, cfg.apiPerMinute, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true });
-    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration });
+    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, version: 6 });
     if (p === '/api/session' && m === 'GET') {
-      try { const s = auth(req); return json(res, 200, { authenticated: true, createdAt: q.userById.get(s.userId).created_at }); }
+      try { const s = auth(req), u = q.userById.get(s.userId); return json(res, 200, { authenticated: true, createdAt: u.created_at, totp: !!u.totp_wrapped }); }
       catch (e) { if (e instanceof HttpError) return json(res, 200, { authenticated: false }); throw e; }
     }
     csrfCheck(req);
-    const ip = clientIp(req);
 
     if (p === '/api/register' && m === 'POST') {
       if (!cfg.registration) throw err(403, 'closed', 'Die Registrierung ist derzeit geschlossen.');
-      if (!rateOk('reg:' + ip, 5, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Registrierungen. Bitte später erneut versuchen.');
+      if (!rateOk('reg:' + ip, cfg.registerPerHour, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Registrierungen. Bitte später erneut versuchen.');
       const b = await readBody(req, 4096);
-      const email = checkEmail(b.email); checkPassword(b.password);
+      const email = checkEmail(b.email); checkPassword(b.password, email);
       const eh = C.emailHash(pepper, email);
       if (q.userByEmail.get(eh)) throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.');
-      const acc = await C.createAccount(b.password), r = acc.row;
+      const acc = await kdf(() => C.createAccount(b.password)), r = acc.row;
       let id;
       try { id = Number(q.addUser.run(eh, r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, Date.now()).lastInsertRowid); }
       catch (e) { throw err(409, 'exists', 'Diese E-Mail-Adresse ist bereits registriert.'); }
       await startSession(req, res, id, acc.dek);
+      logEvent(id, 'register');
       return json(res, 201, { ok: true, recoveryCode: acc.recovery });
     }
 
     if (p === '/api/login' && m === 'POST') {
-      if (!rateOk('login:' + ip, 20, 600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen.');
+      if (!rateOk('login:' + ip, cfg.loginPer10Min, 600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen.');
       const b = await readBody(req, 4096);
       const email = checkEmail(b.email), eh = C.emailHash(pepper, email);
-      if (locked(eh)) throw err(429, 'locked', 'Zu viele Fehlversuche. Das Konto ist für 15 Minuten gesperrt.');
+      if (isLocked(eh, ip)) throw err(429, 'locked', 'Zu viele Fehlversuche. Anmelden ist für 15 Minuten gesperrt.');
       const user = q.userByEmail.get(eh);
-      const dek = await C.unlock(user || await dummyRow, typeof b.password === 'string' ? b.password.slice(0, 200) : '');
-      if (!user || !dek) { failed(eh); throw err(401, 'bad_login', 'E-Mail oder Passwort ist falsch.'); }
-      okLogin(eh);
-      await startSession(req, res, user.id, dek);
+      const row = user || await dummyRow;   /* unbekanntes Konto: gleiche Rechenzeit, damit Konten nicht erratbar sind */
+      const dek = await kdf(() => C.unlock(row, str(b.password)));
+      const dk = user ? dek : null;
+      if (!user || !dk) { loginFailed(eh, ip); if (user) logEvent(user.id, 'login_failed'); throw err(401, 'bad_login', 'E-Mail oder Passwort ist falsch.'); }
+      if (user.totp_wrapped) {
+        if (!b.totp) return json(res, 401, { error: 'totp_required', message: 'Bitte den 6-stelligen Code aus deiner Authenticator-App eingeben.' });
+        const step = T.verify(totpSecretOf(user, dk), b.totp, user.totp_step);
+        if (step < 0) { loginFailed(eh, ip); logEvent(user.id, 'totp_failed'); throw err(401, 'bad_totp', 'Der Code ist falsch oder abgelaufen.'); }
+        q.setTotpStep.run(step, user.id);
+      }
+      loginOk(eh, ip);
+      await startSession(req, res, user.id, dk);
+      logEvent(user.id, 'login');
       return json(res, 200, { ok: true });
     }
 
     if (p === '/api/recover' && m === 'POST') {
       if (!rateOk('rec:' + ip, 8, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche. Bitte später erneut versuchen.');
       const b = await readBody(req, 4096);
-      const email = checkEmail(b.email); checkPassword(b.newPassword);
+      const email = checkEmail(b.email); checkPassword(b.newPassword, email);
       const eh = C.emailHash(pepper, email), user = q.userByEmail.get(eh);
       if (locked('rec:' + eh)) throw err(429, 'locked', 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
-      const dek = user ? await C.unlockWithRecovery(user, b.recoveryCode) : (await C.unlockWithRecovery(await dummyRow, b.recoveryCode), null);
-      if (!user || !dek) { failed('rec:' + eh); throw err(401, 'bad_recovery', 'E-Mail oder Wiederherstellungscode ist falsch.'); }
-      const nw = await C.rewrap(dek, b.newPassword), r = nw.row;
+      const recRow = user || await dummyRow;
+      const dek = await kdf(() => C.unlockWithRecovery(recRow, str(b.recoveryCode, 80)));
+      if (!user || !dek) { failed('rec:' + eh, 8); throw err(401, 'bad_recovery', 'E-Mail oder Wiederherstellungscode ist falsch.'); }
+      const nw = await kdf(() => C.rewrap(dek, b.newPassword)), r = nw.row;
       q.updUser.run(r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, user.id);
+      const had2fa = !!user.totp_wrapped;
+      if (had2fa) q.setTotp.run(null, 0, user.id);   /* Wiederherstellungscode = Generalschlüssel: setzt auch 2FA zurück */
       q.delUserSessions.run(user.id);
+      loginOk(eh, ip);
       await startSession(req, res, user.id, dek);
-      return json(res, 200, { ok: true, recoveryCode: nw.recovery });
+      logEvent(user.id, 'recovery_used'); if (had2fa) logEvent(user.id, '2fa_disabled');
+      return json(res, 200, { ok: true, recoveryCode: nw.recovery, totpReset: had2fa });
     }
 
     /* ab hier: angemeldet */
     const s = auth(req);
-    if (p === '/api/logout' && m === 'POST') { q.delSession.run(s.tokenHash); setCookie(res, req, '', 0); return json(res, 200, { ok: true }); }
+    if (!rateOk('user:' + s.userId, cfg.apiPerMinute, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
+    if (p === '/api/logout' && m === 'POST') { q.delSession.run(s.tokenHash); pendingTotp.delete(s.tokenHash); setCookie(res, req, '', 0); return json(res, 200, { ok: true }); }
     if (p === '/api/me' && m === 'GET') {
       const u = q.userById.get(s.userId);
-      return json(res, 200, { ok: true, createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n });
+      return json(res, 200, { ok: true, createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n, totp: !!u.totp_wrapped });
     }
 
     if (p === '/api/state' && m === 'GET') {
@@ -242,34 +322,88 @@ function createServer(overrides = {}) {
       if (m === 'DELETE') { q.delPhoto.run(s.userId, id); return json(res, 200, { ok: true }); }
     }
 
+    /* Geräte / Sitzungen */
+    if (p === '/api/sessions' && m === 'GET') {
+      const list = q.listSessions.all(s.userId).map(r => {
+        let label = 'Unbekanntes Gerät';
+        if (r.label) { try { label = C.open(s.dek, r.label, `u${s.userId}:label`).toString('utf8'); } catch (e) { /* ignorieren */ } }
+        return { id: r.token_hash.slice(0, 24), current: r.token_hash === s.tokenHash, createdAt: r.created_at, lastSeen: r.last_seen, label };
+      });
+      return json(res, 200, { sessions: list });
+    }
+    if (p === '/api/sessions/others' && m === 'DELETE') { const n = q.delOtherSessions.run(s.userId, s.tokenHash).changes; if (n) logEvent(s.userId, 'sessions_revoked'); return json(res, 200, { ok: true, removed: Number(n) }); }
+    const sm = /^\/api\/sessions\/([a-f0-9]{24})$/.exec(p);
+    if (sm && m === 'DELETE') {
+      const n = q.delSessionById.run(s.userId, sm[1], s.tokenHash).changes;
+      if (!n) throw err(404, 'not_found', 'Sitzung nicht gefunden.');
+      logEvent(s.userId, 'session_revoked');
+      return json(res, 200, { ok: true });
+    }
+
+    if (p === '/api/security-log' && m === 'GET') return json(res, 200, { events: q.listEvents.all(s.userId, cfg.logLimit) });
+
+    /* Zwei-Faktor-Anmeldung */
+    if (p === '/api/2fa/setup' && m === 'POST') {
+      const u = q.userById.get(s.userId);
+      if (u.totp_wrapped) throw err(409, 'exists', 'Die Zwei-Faktor-Anmeldung ist bereits aktiv.');
+      const secret = T.newSecret();
+      pendingTotp.set(s.tokenHash, { secret, until: Date.now() + 10 * 60e3 });
+      return json(res, 200, { secret: T.base32(secret), uri: T.uri(secret, 'Konto ' + new Date(u.created_at).toISOString().slice(0, 10)) });
+    }
+    if (p === '/api/2fa/enable' && m === 'POST') {
+      const b = await readBody(req, 1024), pend = pendingTotp.get(s.tokenHash);
+      if (!pend || pend.until < Date.now()) throw err(400, 'expired', 'Die Einrichtung ist abgelaufen. Bitte neu starten.');
+      if (!rateOk('2fa:' + s.userId, 10, 600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche.');
+      const step = T.verify(pend.secret, b.code, 0);
+      if (step < 0) throw err(400, 'bad_totp', 'Der Code stimmt nicht. Uhrzeit des Handys prüfen und erneut versuchen.');
+      q.setTotp.run(C.seal(s.dek, pend.secret, `u${s.userId}:totp`), step, s.userId);
+      pendingTotp.delete(s.tokenHash);
+      logEvent(s.userId, '2fa_enabled');
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/2fa/disable' && m === 'POST') {
+      const b = await readBody(req, 4096), u = q.userById.get(s.userId);
+      if (!u.totp_wrapped) return json(res, 200, { ok: true });
+      if (!rateOk('2fa:' + s.userId, 10, 600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche.');
+      if (!(await kdf(() => C.unlock(u, str(b.password))))) throw err(401, 'bad_login', 'Das Passwort ist falsch.');
+      if (T.verify(totpSecretOf(u, s.dek), b.code, u.totp_step) < 0) throw err(401, 'bad_totp', 'Der Code ist falsch oder abgelaufen.');
+      q.setTotp.run(null, 0, s.userId);
+      logEvent(s.userId, '2fa_disabled');
+      return json(res, 200, { ok: true });
+    }
+
     if (p === '/api/password' && m === 'POST') {
       const b = await readBody(req, 4096);
       checkPassword(b.newPassword);
-      const user = q.userById.get(s.userId);
       if (!rateOk('pw:' + s.userId, 10, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche.');
-      const dek = await C.unlock(user, typeof b.currentPassword === 'string' ? b.currentPassword.slice(0, 200) : '');
+      const user = q.userById.get(s.userId);
+      const dek = await kdf(() => C.unlock(user, str(b.currentPassword)));
       if (!dek) throw err(401, 'bad_login', 'Das aktuelle Passwort ist falsch.');
-      const nw = await C.rewrap(dek, b.newPassword), r = nw.row;
+      const nw = await kdf(() => C.rewrap(dek, b.newPassword)), r = nw.row;
       q.updUser.run(r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, user.id);
       q.delOtherSessions.run(user.id, s.tokenHash);
+      logEvent(user.id, 'password_changed');
       return json(res, 200, { ok: true, recoveryCode: nw.recovery });
     }
 
     if (p === '/api/export' && m === 'GET') {
+      if (!rateOk('export:' + s.userId, 10, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Exporte. Bitte später erneut versuchen.');
       const d = q.getDoc.get(s.userId, 'state');
       const state = d ? openJson(s.dek, d.blob, `u${s.userId}:state`) : null;
       const photos = {};
       q.allPhotos.all(s.userId).forEach(r => { photos[r.id] = C.open(s.dek, r.blob, `u${s.userId}:photo:${r.id}`).toString('utf8'); });
       const u = q.userById.get(s.userId);
-      return json(res, 200, { exportedAt: new Date().toISOString(), accountCreatedAt: new Date(u.created_at).toISOString(), state, photos });
+      logEvent(s.userId, 'export');
+      return json(res, 200, { exportedAt: new Date().toISOString(), accountCreatedAt: new Date(u.created_at).toISOString(), twoFactor: !!u.totp_wrapped, securityLog: q.listEvents.all(s.userId, cfg.logLimit).map(e => ({ type: e.type, at: new Date(e.at).toISOString() })), state, photos });
     }
 
     if (p === '/api/account' && m === 'DELETE') {
       const b = await readBody(req, 4096);
       if (!rateOk('del:' + s.userId, 5, 3600e3)) throw err(429, 'rate_limited', 'Zu viele Versuche.');
       const user = q.userById.get(s.userId);
-      if (!(await C.unlock(user, typeof b.password === 'string' ? b.password.slice(0, 200) : ''))) throw err(401, 'bad_login', 'Das Passwort ist falsch.');
-      q.delUser.run(user.id);   /* Sitzungen, Dokumente und Fotos folgen per ON DELETE CASCADE */
+      if (!(await kdf(() => C.unlock(user, str(b.password))))) throw err(401, 'bad_login', 'Das Passwort ist falsch.');
+      if (user.totp_wrapped && T.verify(totpSecretOf(user, s.dek), b.code, user.totp_step) < 0) throw err(401, 'bad_totp', 'Bitte zusätzlich einen gültigen Code aus der Authenticator-App eingeben.');
+      q.delUser.run(user.id);   /* Sitzungen, Dokumente, Fotos und Protokoll folgen per ON DELETE CASCADE */
       setCookie(res, req, '', 0);
       return json(res, 200, { ok: true });
     }
@@ -277,10 +411,11 @@ function createServer(overrides = {}) {
   }
 
   /* ---------- Statische Dateien (nur freigegebene Liste) ---------- */
-  const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml' };
-  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'app.js', 'app.css', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'img/preview-dark.jpg', 'img/preview-light.jpg', 'img/preview-mobile.jpg', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png']);
+  const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
+  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'app.js', 'app.css', 'qr.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
+    'img/preview-dark.jpg', 'img/preview-light.jpg', 'img/preview-mobile.jpg', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png']);
   const ALIASES = { '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html' };
-  const zcache = new Map();
+  const fcache = new Map();
   function serveStatic(req, res, pathname) {
     if (!['GET', 'HEAD'].includes(req.method)) throw err(405, 'method', 'Methode nicht erlaubt.');
     const rel = ALIASES[pathname] || pathname.replace(/^\/+/, '');
@@ -288,41 +423,52 @@ function createServer(overrides = {}) {
     const file = path.join(ROOT, rel);
     let st; try { st = fs.statSync(file); } catch (e) { throw err(404, 'not_found', 'Seite nicht gefunden.'); }
     const ext = path.extname(rel);
-    const h = { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': rel === 'sw.js' || ext === '.html' ? 'no-cache' : 'public, max-age=3600' };
-    let body = fs.readFileSync(file);
-    if (/gzip/.test(req.headers['accept-encoding'] || '') && ['.html', '.js', '.css', '.svg', '.json', '.webmanifest'].includes(ext)) {
-      const k = rel + st.mtimeMs; let z = zcache.get(k);
-      if (!z) { z = zlib.gzipSync(body); zcache.set(k, z); }
-      body = z; h['Content-Encoding'] = 'gzip'; h.Vary = 'Accept-Encoding';
+    const key = rel + ':' + st.mtimeMs;
+    let ent = fcache.get(key);
+    if (!ent) {
+      const raw = fs.readFileSync(file);
+      ent = { raw, etag: '"' + crypto.createHash('sha1').update(raw).digest('base64url').slice(0, 20) + '"', gz: ['.html', '.js', '.css', '.svg', '.json', '.webmanifest', '.txt'].includes(ext) ? zlib.gzipSync(raw) : null };
+      for (const k of fcache.keys()) if (k.startsWith(rel + ':')) fcache.delete(k);
+      fcache.set(key, ent);
     }
-    send(res, 200, req.method === 'HEAD' ? '' : body, Object.assign(h, { 'Content-Length': body.length }));
+    const h = { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': rel === 'sw.js' || ext === '.html' ? 'no-cache' : 'public, max-age=3600', ETag: ent.etag, Vary: 'Accept-Encoding' };
+    if (req.headers['if-none-match'] === ent.etag) { res.writeHead(304, h); return res.end(); }
+    let body = ent.raw;
+    if (ent.gz && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) { body = ent.gz; h['Content-Encoding'] = 'gzip'; }
+    h['Content-Length'] = body.length;
+    res.writeHead(200, h);
+    res.end(req.method === 'HEAD' ? undefined : body);
   }
 
   const SEC = {
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; manifest-src 'self'; worker-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY',
-    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()', 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin'
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()',
+    'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Resource-Policy': 'same-origin', 'X-Permitted-Cross-Domain-Policies': 'none'
   };
   const server = http.createServer(async (req, res) => {
     Object.entries(SEC).forEach(([k, v]) => res.setHeader(k, v));
-    if (isSecure(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    if (!isSecure(req)) res.setHeader('Content-Security-Policy', SEC['Content-Security-Policy'].replace('; upgrade-insecure-requests', ''));
+    else res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     try {
+      if ((req.url || '').length > 2048) throw err(414, 'uri_too_long', 'Adresse zu lang.');
       const url = new URL(req.url, 'http://x');
       if (url.pathname.startsWith('/api/')) await api(req, res, url);
-      else serveStatic(req, res, decodeURIComponent(url.pathname));
+      else { let pn; try { pn = decodeURIComponent(url.pathname); } catch (e) { throw err(400, 'bad_path', 'Ungültige Adresse.'); } serveStatic(req, res, pn); }
     } catch (e) {
       if (res.headersSent) return res.end();
-      if (e instanceof HttpError) return json(res, e.status, { error: e.code, message: e.message });
+      if (e instanceof HttpError) return json(res, e.status, Object.assign({ error: e.code, message: e.message }, e.extra || {}));
       console.error('Serverfehler:', e && e.stack || e);
       json(res, 500, { error: 'server', message: 'Interner Fehler.' });
     }
   });
-  server.requestTimeout = 30000; server.headersTimeout = 15000;
+  server.requestTimeout = 30000; server.headersTimeout = 15000; server.keepAliveTimeout = 5000; server.maxHeadersCount = 60;
   server.on('close', () => { clearInterval(sweep); try { db.close(); } catch (e) { /* ignore */ } });
+  server.db = db; /* für Wartung/Backup */
   return server;
 }
 
-module.exports = { createServer };
+module.exports = { createServer, CFG };
 if (require.main === module) {
   const s = createServer();
   s.listen(CFG.port, CFG.host, () => console.log(`AutoPot Grow läuft auf http://${CFG.host === '0.0.0.0' ? 'localhost' : CFG.host}:${CFG.port} (Registrierung: ${CFG.registration ? 'offen' : 'geschlossen'})`));

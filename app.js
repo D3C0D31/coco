@@ -53,12 +53,18 @@ const vpdOf = e => calcVpd(e.airTemp, e.humidity);
 const IMG_RE = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
 
 let toastTimer;
-function toast(msg, isErr) {
+function toast(msg, isErr, action) {
   const t = $('toast');
   t.textContent = msg;
-  t.className = 'show' + (isErr ? ' err' : '');
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label;
+    b.addEventListener('click', () => { t.className = ''; action.fn(); }, { once: true });
+    t.appendChild(b);
+  }
+  t.className = 'show' + (isErr ? ' err' : '') + (action ? ' act' : '');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = ''; }, isErr ? 6000 : 2800);
+  toastTimer = setTimeout(() => { t.className = ''; }, action ? 8000 : isErr ? 6000 : 2800);
 }
 
 function normPhase(p) {
@@ -72,10 +78,10 @@ function normPhase(p) {
   return String(p).trim().slice(0, 60);
 }
 
-/* ---------- Datenmodell (Schema v4) ---------- */
+/* ---------- Datenmodell (Schema v5) ---------- */
 const blank = () => ({
-  version: 4,
-  settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
+  version: 5,
+  settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, flowerStart: null, flowerWeeks: 9, lightHours: 18, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
   entries: [], recipes: [], events: [], reminders: [],
   checks: { setup: {}, week: {} },
   harvest: { date: '', wet: null, dry: null, watt: null, note: '' },
@@ -115,6 +121,9 @@ function normalize(d) {
   const dstr = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) ? v.slice(0, 10) : null;
   out.settings.startDate = dstr(s.startDate); out.settings.phaseStart = dstr(s.phaseStart); out.settings.lastTankChange = dstr(s.lastTankChange);
   const iv = num(s.tankInterval); out.settings.tankInterval = iv != null && iv >= 1 ? Math.min(365, Math.round(iv)) : 14;
+  out.settings.flowerStart = dstr(s.flowerStart);
+  const fw = num(s.flowerWeeks); out.settings.flowerWeeks = fw != null && fw >= 4 && fw <= 20 ? Math.round(fw) : 9;
+  const lh = num(s.lightHours); out.settings.lightHours = lh != null && lh > 0 && lh <= 24 ? lh : (out.settings.phase === 'Hauptblüte' || out.settings.phase === 'Endphase' || out.settings.phase === 'Übergang / frühe Blüte' ? 12 : 18);
   out.entries = (Array.isArray(d.entries) ? d.entries : []).map(normEntry).filter(Boolean);
   out.recipes = (Array.isArray(d.recipes) ? d.recipes : []).filter(r => r && r.name).map(r => ({ id: String(r.id || uid()), name: String(r.name).slice(0, 60), phase: String(r.phase ?? '').slice(0, 60), text: String(r.text ?? '').slice(0, 500) }));
   out.events = (Array.isArray(d.events) ? d.events : []).filter(e => e && /^\d{4}-\d{2}-\d{2}/.test(e.date || '') && e.title).map(e => ({ id: String(e.id || uid()), date: String(e.date).slice(0, 10), title: String(e.title).slice(0, 80), note: String(e.note ?? '').slice(0, 300) }));
@@ -349,6 +358,8 @@ function renderHero() {
     $('heroDay').textContent = 'Noch kein Start';
     $('heroSub').textContent = 'Trage unten ein Startdatum ein, dann zählt die App Tage und Wochen.';
   }
+  const fi = flowerInfo();
+  $('heroFlower').textContent = fi ? (fi.left > 0 ? `🌸 Blütewoche ${fi.week} von ${fi.weeks} · Ernte ca. ab ${fmtDate(fi.harvest)} (noch ${fi.left} Tage)` : `🌾 Erntefenster erreicht (geplant ab ${fmtDate(fi.harvest)}) – Reife an den Trichomen prüfen`) : (PHASES.indexOf(S.settings.phase) < 2 ? `Blüte noch nicht gestartet · Blütedauer laut Sorte: ${S.settings.flowerWeeks} Wochen` : 'Blütebeginn im Bereich „Aktueller Grow“ eintragen, dann berechnet die App den Erntetermin.');
   const idx = PHASES.indexOf(S.settings.phase);
   $('phaseSteps').innerHTML = PHASES.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'now' : ''}"${i === idx ? ' aria-current="step"' : ''}><span title="${esc(p)}">${PH_SHORT[i]}</span></li>`).join('');
   const sc = growScore();
@@ -361,7 +372,7 @@ function renderHero() {
 }
 
 function renderDashboard() {
-  renderHero();
+  renderHero(); renderTip(); renderWeekly();
   const es = sorted(), e = es[es.length - 1];
   const pn = e && PROFILE[e.phase] ? e.phase : S.settings.phase, p = PROFILE[pn];
   const v = e ? vpdOf(e) : null;
@@ -732,7 +743,7 @@ function renderChecks() {
 }
 
 function renderAll() {
-  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks();
+  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks(); if ($('refTable')) { renderKnowledge(); renderPower(); }
 }
 
 /* ---------- Formular ---------- */
@@ -827,14 +838,19 @@ function exportCsv() {
   download('autopot-grow-log.csv', '\ufeff' + [CSV_HEAD, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n') + '\r\n', 'text/csv;charset=utf-8');
   toast('CSV exportiert.');
 }
-function exportJson() {
-  S.settings.lastBackup = new Date().toISOString();
-  S.settings.entriesSinceBackup = 0;
-  save();
-  const data = Object.assign({ exportedAt: S.settings.lastBackup }, S, { entries: S.entries.map(e => Object.assign({}, e, { photo: photoCache.get(e.id) || '' })) });
-  download('autopot-grow-backup.json', JSON.stringify(data, null, 2), 'application/json');
-  renderDashboard();
-  toast('Backup exportiert (inklusive Fotos).');
+async function exportJson(password) {
+  const stamp = new Date().toISOString();
+  const data = Object.assign({ exportedAt: stamp }, S, { settings: Object.assign({}, S.settings, { lastBackup: stamp, entriesSinceBackup: 0 }), entries: S.entries.map(e => Object.assign({}, e, { photo: photoCache.get(e.id) || '' })) });
+  let text = JSON.stringify(data, null, 2), name = 'autopot-grow-backup.json';
+  if (password) {
+    try { text = await encryptText(text, password); name = 'autopot-grow-backup.verschluesselt.json'; }
+    catch (e) { toast('Verschlüsseln ist in diesem Browser nicht möglich (nur über https oder lokal).', true); return false; }
+  }
+  download(name, text, 'application/json');
+  S.settings.lastBackup = stamp; S.settings.entriesSinceBackup = 0;
+  save(); renderDashboard();
+  toast(password ? 'Verschlüsseltes Backup exportiert (inklusive Fotos).' : 'Backup exportiert (inklusive Fotos).');
+  return true;
 }
 function parseCsv(text) {
   text = text.replace(/^\uFEFF/, '');
@@ -880,6 +896,12 @@ function importFile(file) {
     }
     let data;
     try { data = JSON.parse(text); } catch (e) { toast('Ungültige JSON-Datei.', true); return; }
+    if (data && data.format === ENC_FORMAT) {
+      const pw = await askPassword('Verschlüsseltes Backup öffnen', 'Gib das Passwort ein, mit dem das Backup gesichert wurde.');
+      if (!pw) return;
+      try { data = JSON.parse(await decryptText(data, pw)); }
+      catch (e) { toast('Falsches Passwort oder beschädigte Datei.', true); return; }
+    }
     if (!data || typeof data !== 'object' || Array.isArray(data) || !(Array.isArray(data.entries) || data.settings)) { toast('Die Datei ist kein Grow-Backup.', true); return; }
     const n = normalize(data);
     if (!confirm(`Backup mit ${n.entries.length} Einträgen laden?\nDie aktuellen Daten (${S.entries.length} Einträge) werden ersetzt. Über „Letzten Import rückgängig machen“ kannst du den alten Stand zurückholen.`)) return;
@@ -908,6 +930,8 @@ function loadSettings() {
   const s = S.settings;
   $('sName').value = s.name; $('sPhase').value = s.phase; $('sStart').value = s.startDate || '';
   $('sTankSize').value = s.tankSize; $('sTankRest').value = s.tankRest; $('sDailyUse').value = s.dailyUse; $('sInterval').value = s.tankInterval;
+  $('sLight').value = s.lightHours; $('sFlowerWeeks').value = s.flowerWeeks; $('sFlowerStart').value = s.flowerStart || '';
+  if (!$('pwHours').dataset.touched) $('pwHours').value = s.lightHours;
   const h = S.harvest;
   $('hDate').value = h.date || ''; $('hWet').value = h.wet ?? ''; $('hDry').value = h.dry ?? ''; $('hWatt').value = h.watt ?? ''; $('hNote').value = h.note || '';
 }
@@ -917,14 +941,18 @@ function onSettings() {
   s.startDate = /^\d{4}-\d{2}-\d{2}$/.test($('sStart').value) ? $('sStart').value : null;
   s.tankSize = num($('sTankSize').value) ?? s.tankSize; s.tankRest = num($('sTankRest').value) ?? s.tankRest; s.dailyUse = num($('sDailyUse').value) ?? s.dailyUse;
   const iv = num($('sInterval').value); if (iv != null && iv >= 1) s.tankInterval = Math.round(iv);
+  const lh = num($('sLight').value); if (lh != null && lh > 0 && lh <= 24) s.lightHours = lh;
+  const fw = num($('sFlowerWeeks').value); if (fw != null && fw >= 4 && fw <= 20) s.flowerWeeks = Math.round(fw);
+  s.flowerStart = /^\d{4}-\d{2}-\d{2}$/.test($('sFlowerStart').value) ? $('sFlowerStart').value : null;
   if (old !== s.phase) {
     s.phaseStart = todayStr();
+    if (s.phase === 'Übergang / frühe Blüte' && !s.flowerStart) { s.flowerStart = todayStr(); $('sFlowerStart').value = s.flowerStart; s.lightHours = 12; $('sLight').value = 12; toast('Blütebeginn auf heute gesetzt, Lichtstunden auf 12 – beides im Bereich „Aktueller Grow“ änderbar.'); }
     S.events.push({ id: uid(), date: todayStr(), title: 'Phase: ' + s.phase, note: '' });
     renderLists();
   }
   save();
   if (!editingId) $('fPhase').value = s.phase;
-  renderDashboard(); renderCharts(); renderCalc(); renderHarvest();
+  renderDashboard(); renderCharts(); renderCalc(); renderHarvest(); renderKnowledge(); renderPower();
 }
 function onHarvest() {
   S.harvest = { date: /^\d{4}-\d{2}-\d{2}$/.test($('hDate').value) ? $('hDate').value : '', wet: num($('hWet').value), dry: num($('hDry').value), watt: num($('hWatt').value), note: $('hNote').value.slice(0, 300) };
@@ -953,7 +981,7 @@ function newGrow() {
   } catch (e) { /* ignore */ }
   S.archive.unshift(item);
   S.entries = []; S.events = []; S.harvest = blank().harvest; S.checks.week = {};
-  Object.assign(S.settings, { startDate: null, phaseStart: null, lastTankChange: null, phase: PHASES[0], tankRest: S.settings.tankSize });
+  Object.assign(S.settings, { startDate: null, phaseStart: null, flowerStart: null, lastTankChange: null, phase: PHASES[0], lightHours: 18, tankRest: S.settings.tankSize });
   [...photoCache.keys()].forEach(id => { if (!keep.has(id)) dropPhoto(id); });
   save(); loadSettings(); resetForm(); renderAll();
   toast('Grow archiviert. Neues Protokoll gestartet.');
@@ -999,6 +1027,159 @@ function updateNav() {
 }
 const QUICK_TAGS = ['pH korrigiert', 'Tank gewechselt', 'Gedüngt', 'Entlaubt', 'LST / Training', 'Umgetopft', 'Schädlinge', 'Mangel', 'Filter gereinigt'];
 
+/* ---------- Wissen: Tipps, Richtwerte, Nährstoffe, Glossar ---------- */
+const TIPS = {
+  'Jungpflanze / Anwachsen': ['Die ersten Tage von oben gießen, bis die Wurzeln die AirBase-Kanäle erreichen. Erst dann das AutoPot-System übernehmen lassen (Anleitung Kap. 6).', 'Junge Pflanzen mögen hohe Luftfeuchte (65–75 %) und wenig Licht. Lieber zu wenig als zu viel PPFD.', 'Tank-EC niedrig halten (0,6–1,0). Mehr Dünger beschleunigt jetzt nichts, sondern stresst die Wurzeln.', 'Wassertemperatur 18–22 °C: Kaltes Wasser bremst die Wurzeln, warmes fördert Krankheitserreger.', 'Einmal täglich messen und eintragen – so erkennst du Trends, bevor Blätter Symptome zeigen.'],
+  'Vegetation': ['Immer nur eine Sache auf einmal ändern und 2–3 Tage beobachten, sonst weißt du nicht, was gewirkt hat.', 'Steigender Wasserverbrauch ist ein gutes Zeichen: Die Wurzeln arbeiten. Plane den Tankwechsel rechtzeitig ein.', 'Trainingsmethoden wie LST jetzt anwenden – in der Blüte verzeihen Pflanzen weniger.', 'VPD 1,0–1,3 kPa: Bei zu niedrigem VPD transpiriert die Pflanze kaum und nimmt weniger Calcium auf.', 'Blattunterseiten wöchentlich mit der Lupe prüfen. Früh erkannte Schädlinge sind leicht zu stoppen.'],
+  'Übergang / frühe Blüte': ['Die Pflanzen strecken sich jetzt stark – Lampenabstand und PPFD regelmäßig kontrollieren.', 'Luftfeuchte schrittweise auf 50–60 % senken, damit sich in den dichter werdenden Trieben keine Feuchtigkeit staut.', 'EC langsam anheben (1,5–1,9). Große Sprünge führen zu verbrannten Spitzen.', 'Blütebeginn im Dashboard eintragen – dann rechnet die App den voraussichtlichen Erntetermin aus.', 'Untere, beschattete Triebe ohne Licht bringen wenig Ertrag. Entlauben behutsam und in Etappen.'],
+  'Hauptblüte': ['Luftfeuchte 40–55 % und gute Umluft schützen die Blüten vor Schimmel (Anleitung Kap. 9 und 16).', 'Blätter, die jetzt von unten gelb werden, sind oft normal. Kritisch wird es, wenn junge Blätter betroffen sind.', 'Nachts nicht zu kalt werden lassen: Große Tag-Nacht-Unterschiede erhöhen die Kondensgefahr.', 'Tank-pH 5,8–6,2 konsequent halten – ein abgedrifteter pH ist die häufigste Ursache scheinbarer Mängel.', 'Fotos alle paar Tage machen: In der Galerie siehst du die Entwicklung der Blüten im Zeitraffer.'],
+  'Endphase': ['EC schrittweise senken, nicht abrupt auf reines Wasser wechseln (Anleitung Kap. 7).', 'Reife an den Trichomen mit einer Lupe beurteilen, nicht nur am Kalender.', 'Klima wie in der späten Blüte halten: rF 40–55 %, gute Umluft, keine Nässe.', 'Erntedatum und Gewichte im Bereich „Ernte“ eintragen – so vergleichst du deine Grows im Archiv.', 'Nach der Ernte: Grow abschließen, Backup behalten, System gründlich reinigen.']
+};
+const NUTRIENTS = [
+  { n: 'Stickstoff (N)', mob: true, sym: 'Gleichmäßige Aufhellung bis Gelbfärbung, beginnt an den älteren, unteren Blättern; Wachstum verlangsamt.', cause: 'EC zu niedrig, pH außerhalb des Zielbereichs. In der späten Blüte ist leichtes Vergilben unten normal.' },
+  { n: 'Phosphor (P)', mob: true, sym: 'Dunkle, matte Blätter, teils bläulich-violette Töne, langsames Wachstum; ältere Blätter zuerst.', cause: 'Kalte Wurzelzone, pH-Problem. Rötliche Stiele allein sind oft sortenbedingt und kein Mangel.' },
+  { n: 'Kalium (K)', mob: true, sym: 'Braune, wie verbrannt wirkende Blattränder und -spitzen an älteren und mittleren Blättern.', cause: 'Unterversorgung in der Blüte oder Konkurrenz durch zu viel Calcium/Magnesium.' },
+  { n: 'Magnesium (Mg)', mob: true, sym: 'Gelbe Bereiche zwischen grün bleibenden Blattadern (Interkostalchlorose) an älteren und mittleren Blättern.', cause: 'Coco nicht gepuffert, sehr weiches Wasser oder Osmosewasser ohne CalMag, pH zu niedrig.' },
+  { n: 'Calcium (Ca)', mob: false, sym: 'Braune, rostartige Flecken, verkrüppelte oder gewellte neue Blätter, schwache Triebspitzen.', cause: 'Coco bindet Calcium, weiches Wasser, zu niedriger VPD (wenig Transpiration), pH-Abweichung.' },
+  { n: 'Schwefel (S)', mob: false, sym: 'Gleichmäßige Aufhellung der jungen Blätter (ähnlich Stickstoffmangel, aber oben).', cause: 'Selten bei Komplettdünger; meist pH-bedingt.' },
+  { n: 'Eisen (Fe)', mob: false, sym: 'Neue Blätter hellgelb bis fast weiß, Adern bleiben grün.', cause: 'pH zu hoch, kalte oder zu nasse Wurzelzone – selten echter Eisenmangel.' },
+  { n: 'Mangan (Mn)', mob: false, sym: 'Interkostalchlorose mit kleinen braunen Flecken an jungen und mittleren Blättern.', cause: 'pH zu hoch.' },
+  { n: 'Zink (Zn)', mob: false, sym: 'Kleine, schmale, verdrehte neue Blätter, sehr kurze Abstände zwischen den Blattpaaren.', cause: 'pH zu hoch, Überschuss an Phosphor.' },
+  { n: 'Bor (B)', mob: false, sym: 'Verdickte, verkrüppelte Triebspitzen, abgestorbene Wachstumspunkte.', cause: 'Sehr trockene Luft, pH-Abweichung; selten.' }
+];
+const GLOSSARY = [
+  ['EC', 'Elektrische Leitfähigkeit der Nährlösung in mS/cm – Maß für die Salz- bzw. Düngerkonzentration. Leitungswasser hat bereits einen Grund-EC.'],
+  ['PPM', 'Andere Darstellung des EC. Hängt von der Skala des Messgeräts ab (500, 640 oder 700) – deshalb rechnet die Anleitung in EC.'],
+  ['pH', 'Säuregrad der Lösung. In Coco 5,8–6,2: In diesem Bereich sind alle Nährstoffe gut verfügbar.'],
+  ['VPD', 'Dampfdruckdefizit in kPa: wie stark die Luft der Pflanze Wasser „entzieht“. Ergibt sich aus Temperatur und Luftfeuchte.'],
+  ['PPFD', 'Photosynthetisch aktive Lichtmenge, die pro Sekunde auf einen Quadratmeter trifft (µmol/m²/s). Messung mit PAR-Meter.'],
+  ['DLI', 'Tageslichtsumme (mol/m²/Tag) = PPFD × Lichtstunden × 0,0036. Zeigt, wie viel Licht pro Tag ankommt.'],
+  ['Interkostalchlorose', 'Gelbfärbung zwischen den Blattadern, während die Adern grün bleiben – typisch für Mg-, Fe- oder Mn-Probleme.'],
+  ['Mobil / immobil', 'Mobile Nährstoffe kann die Pflanze aus alten Blättern umlagern – Mängel zeigen sich unten. Immobile bleiben, wo sie sind – Mängel zeigen sich oben.'],
+  ['Lockout', 'Nährstoffe sind vorhanden, aber nicht aufnehmbar, meist wegen falschem pH oder Salzaufbau.'],
+  ['CalMag', 'Calcium-Magnesium-Zusatz. In Coco und bei weichem Wasser oft nötig, weil Coco Calcium bindet.'],
+  ['Puffern (Coco)', 'Vorbehandlung von Coco mit Ca/Mg-Lösung, damit es später keine Nährstoffe aus der Lösung bindet (Anleitung Kap. 3).'],
+  ['AquaValve', 'Ventil des AutoPot-Systems: lässt Wasser in das Tray, sobald es leer ist, und schließt bei etwa 1–2 cm Wasserstand.'],
+  ['AirDome / AirBase', 'Bauteile für zusätzliche Luft an den Wurzeln: Die AirBase-Kanäle unter dem Topf, der AirDome versorgt den Boden mit Luft.'],
+  ['Trockengewicht', 'Gewicht nach dem Trocknen. Der Trocknungsverlust gegenüber dem Nassgewicht liegt meist bei 70–80 %.']
+];
+function dayOfYear() { const d = new Date(); return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5); }
+function renderTip() {
+  const list = TIPS[S.settings.phase] || TIPS.Vegetation;
+  $('tipBox').innerHTML = `<div class="notice tip"><span>💡 <strong>Tipp für die Phase ${esc(S.settings.phase)}:</strong> ${esc(list[dayOfYear() % list.length])}</span></div>`;
+}
+function renderKnowledge() {
+  const rows = PHASES.map(p => {
+    const r = PROFILE[p];
+    return `<tr${p === S.settings.phase ? ' class="now"' : ''}><th>${esc(p)}</th><td>${rng(r.ec)}</td><td>${rng(PH_RANGE)}</td><td>${rng(r.vpd)} kPa</td><td>${r.temp[0]}–${r.temp[1]} °C</td><td>${r.rh[0]}–${r.rh[1]} %</td><td>${r.ppfd ? `${r.ppfd[0]}–${r.ppfd[1]}` : 'keine feste Vorgabe'}</td></tr>`;
+  }).join('');
+  $('refTable').innerHTML = `<thead><tr><th>Phase</th><th>Tank-EC</th><th>pH</th><th>VPD</th><th>Luft</th><th>rF</th><th>PPFD</th></tr></thead><tbody>${rows}</tbody>`;
+  const q = ($('nutriSearch').value || '').trim().toLowerCase();
+  const list = NUTRIENTS.filter(x => !q || `${x.n} ${x.sym} ${x.cause}`.toLowerCase().includes(q));
+  $('nutriList').innerHTML = list.map(x => `<div class="card nutri"><h3>${esc(x.n)} <span class="chip ${x.mob ? 'mute' : 'warn'}">${x.mob ? 'mobil – unten zuerst' : 'immobil – oben zuerst'}</span></h3><p><strong>Anzeichen:</strong> ${esc(x.sym)}</p><p class="sub"><strong>Häufige Ursache:</strong> ${esc(x.cause)}</p></div>`).join('') || '<p class="sub">Kein Treffer.</p>';
+  $('glossar').innerHTML = GLOSSARY.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join('');
+}
+
+/* ---------- Wochenbericht ---------- */
+function renderWeekly() {
+  const win = (a, b) => S.entries.filter(e => { const d = daysAgo(e.date); return d >= a && d <= b; });
+  const cur = win(0, 6), prev = win(7, 13);
+  if (!cur.length) { $('weekly').innerHTML = '<p class="sub" style="margin:0">In den letzten 7 Tagen gibt es noch keine Messwerte.</p>'; return; }
+  const avg = (list, fn) => { const v = list.map(fn).filter(x => x != null && Number.isFinite(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  const M = [['EC', e => e.ec, 2, ''], ['pH', e => e.ph, 2, ''], ['VPD', vpdOf, 2, ' kPa'], ['Lufttemperatur', e => e.airTemp, 1, ' °C'], ['Luftfeuchte', e => e.humidity, 0, ' %'], ['Wassertemperatur', e => e.waterTemp, 1, ' °C'], ['Verbrauch', e => e.use, 1, ' L/Tag']];
+  const rows = M.map(([label, fn, d, u]) => {
+    const a = avg(cur, fn), b = avg(prev, fn);
+    if (a == null) return '';
+    let trend = '<span class="sub">–</span>';
+    if (b != null) { const diff = a - b, eps = Math.pow(10, -d) / 2; trend = Math.abs(diff) < eps ? '<span class="tr-eq">▶ gleich</span>' : `<span class="${diff > 0 ? 'tr-up' : 'tr-down'}">${diff > 0 ? '▲' : '▼'} ${nf(Math.abs(diff), d)}</span>`; }
+    const f = v => (label === 'pH' ? fmtPh(v) : nf(v, d)) + u;
+    return `<tr><th>${label}</th><td>${f(a)}</td><td>${b == null ? '–' : f(b)}</td><td>${trend}</td></tr>`;
+  }).join('');
+  const maxH = list => { const v = list.map(e => e.height).filter(x => x != null); return v.length ? Math.max(...v) : null; };
+  const h1 = maxH(cur), h0 = maxH(prev);
+  let ok = 0, n = 0;
+  cur.forEach(e => { const p = phaseProfile(e); [[e.ph, PH_RANGE], [e.ec, p.ec], [vpdOf(e), p.vpd], [e.airTemp, p.temp], [e.humidity, p.rh]].forEach(([v, r]) => { if (v == null || !r) return; n++; if (v >= r[0] && v <= r[1]) ok++; }); });
+  $('weekly').innerHTML = `<p class="sub" style="margin:0 0 8px">${cur.length} ${cur.length === 1 ? 'Eintrag' : 'Einträge'} in den letzten 7 Tagen${n ? ` · ${Math.round(ok / n * 100)} % der Werte im Ziel` : ''}${h1 != null && h0 != null ? ` · Zuwachs ${nf(h1 - h0, 1)} cm` : ''}</p><div class="table-wrap"><table class="mini"><thead><tr><th>Ø Wert</th><th>Diese Woche</th><th>Vorwoche</th><th>Trend</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---------- Ernteprognose ---------- */
+function flowerInfo() {
+  const s = S.settings;
+  if (!s.flowerStart) return null;
+  const days = Math.max(0, dayDiff(s.flowerStart, todayStr()));
+  const end = new Date(s.flowerStart + 'T12:00:00'); end.setDate(end.getDate() + s.flowerWeeks * 7);
+  const left = dayDiff(todayStr(), isoOf(end));
+  return { week: Math.floor(days / 7) + 1, weeks: s.flowerWeeks, harvest: isoOf(end), left };
+}
+
+/* ---------- Letzte Werte, Stromkosten ---------- */
+function fillLast() {
+  const e = sorted().pop();
+  if (!e) { toast('Es gibt noch keinen Eintrag zum Übernehmen.', true); return; }
+  [['fEc', e.ec], ['fPh', e.ph], ['fWater', e.waterTemp], ['fAir', e.airTemp], ['fRh', e.humidity], ['fPpfd', e.ppfd], ['fUse', e.use], ['fHeight', e.height]].forEach(([id, v]) => { if (v != null) $(id).value = v; });
+  toast(`Werte vom ${fmtDate(e.date)} übernommen – bitte vor dem Speichern prüfen.`);
+}
+function renderPower() {
+  if (!$('pwHours').dataset.touched) $('pwHours').value = S.settings.lightHours;
+  const w = num($('pwWatt').value) || 0, h = num($('pwHours').value) || 0, extra = num($('pwExtra').value) || 0, price = num($('pwPrice').value) || 0;
+  if (h < 0 || h > 24) { $('pwOut').textContent = 'Lichtstunden zwischen 0 und 24 angeben.'; return; }
+  const kwh = (w * h + extra * 24) / 1000, day = kwh * price;
+  const fi = flowerInfo(), gi = growInfo();
+  const eur = v => v.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+  $('pwOut').innerHTML = `<strong>${nf(kwh, 2)} kWh</strong> pro Tag · <strong>${eur(day)}</strong> pro Tag<br>${eur(day * 7)} pro Woche · ${eur(day * 30)} pro Monat${gi ? `<br>Bisher (${gi.day} Tage, grob): ${eur(day * gi.day)}` : ''}${fi && fi.left > 0 ? `<br>Bis zur Ernte (${fi.left} Tage): ${eur(day * fi.left)}` : ''}`;
+  try { localStorage.setItem('autopot-power', JSON.stringify({ w, extra, price })); } catch (e) { /* ignore */ }
+}
+
+/* ---------- Verschlüsseltes Backup (Web Crypto: PBKDF2-SHA-256 + AES-256-GCM) ---------- */
+const ENC_FORMAT = 'autopot-encrypted-backup';
+const b64enc = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const b64dec = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function pbkdfKey(pw, salt, iter) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: iter }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptText(text, pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12)), iter = 600000;
+  const key = await pbkdfKey(pw, salt, iter);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(ENC_FORMAT + ':1') }, key, new TextEncoder().encode(text)));
+  return JSON.stringify({ format: ENC_FORMAT, v: 1, kdf: 'PBKDF2-SHA256', iterations: iter, cipher: 'AES-256-GCM', salt: b64enc(salt), iv: b64enc(iv), data: b64enc(ct) });
+}
+async function decryptText(obj, pw) {
+  const iter = Number(obj.iterations);
+  if (obj.v !== 1 || !(iter >= 100000 && iter <= 10000000)) throw new Error('Unbekanntes Format');
+  const key = await pbkdfKey(pw, b64dec(obj.salt), iter);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64dec(obj.iv), additionalData: new TextEncoder().encode(ENC_FORMAT + ':1') }, key, b64dec(obj.data));
+  return new TextDecoder().decode(pt);
+}
+let pwAskResolve = null;
+function askPassword(title, hint) {
+  $('pwAskTitle').textContent = title; $('pwAskHint').textContent = hint || ''; $('pwAskInput').value = '';
+  openDlg('pwAsk'); setTimeout(() => $('pwAskInput').focus(), 30);
+  return new Promise(res => { pwAskResolve = res; });
+}
+function finishAsk(v) { const r = pwAskResolve; pwAskResolve = null; closeDlg('pwAsk'); if (r) r(v); }
+
+/* ---------- Passwortstärke ---------- */
+function pwScore(pw) {
+  if (!pw) return 0;
+  let pool = 0;
+  if (/[a-z]/.test(pw)) pool += 26; if (/[A-Z]/.test(pw)) pool += 26; if (/\d/.test(pw)) pool += 10; if (/[^A-Za-z0-9]/.test(pw)) pool += 33;
+  let bits = pw.length * Math.log2(Math.max(pool, 2));
+  if (/(.)\1{2,}/.test(pw)) bits -= 10;
+  if (/^[a-zA-ZäöüÄÖÜß]+$|^\d+$/.test(pw)) bits -= 10;
+  if (/(passwort|password|qwert|asdf|1234|abcd|grow|autopot|hallo)/i.test(pw)) bits -= 20;
+  if (pw.length < 10) return 1;
+  return bits < 45 ? 1 : bits < 60 ? 2 : bits < 75 ? 3 : 4;
+}
+const PW_LABEL = ['', 'schwach', 'mittel', 'gut', 'stark'];
+function bindPwMeters() {
+  document.querySelectorAll('[data-pwmeter]').forEach(m => {
+    const inp = $(m.dataset.pwmeter);
+    const upd = () => { const s = pwScore(inp.value); m.dataset.score = s; m.querySelector('span').textContent = inp.value ? `Passwortstärke: ${PW_LABEL[s]}` : ''; };
+    inp.addEventListener('input', upd); upd();
+  });
+}
+
 /* ---------- Cloud-Konto & Synchronisation ---------- */
 const CLOUD = { available: false, user: null, status: 'off', last: null, busy: false, again: false, dirty: false, applying: false, timer: null };
 const SYNC_KEY = 'autopot-sync';
@@ -1012,7 +1193,7 @@ async function cloudApi(method, url, body) {
     res = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' }, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch (e) { return { ok: false, status: 0, data: null }; }
   let data = null; try { data = await res.json(); } catch (e) { /* kein JSON */ }
-  if (res.status === 401 && CLOUD.user && !/\/api\/(login|recover|password|account)$/.test(url)) {
+  if (res.status === 401 && CLOUD.user && !/\/api\/(login|recover|password|account|2fa\/\w+)$/.test(url)) {
     CLOUD.user = null; setSyncStatus('expired'); toast('Sitzung abgelaufen. Bitte im Konto-Dialog neu anmelden.', true); renderAccount();
   }
   return { ok: res.ok, status: res.status, data };
@@ -1020,8 +1201,7 @@ async function cloudApi(method, url, body) {
 const STATUS_TEXT = { off: 'Nicht angemeldet – Daten nur auf diesem Gerät', ok: 'Synchronisiert', syncing: 'Synchronisiere …', offline: 'Offline – Änderungen werden später übertragen', error: 'Synchronisierung fehlgeschlagen', expired: 'Sitzung abgelaufen – bitte neu anmelden' };
 function setSyncStatus(s) {
   CLOUD.status = s;
-  const dot = $('syncDot');
-  if (dot) { dot.className = 'sync-dot ' + s; dot.title = STATUS_TEXT[s] || ''; }
+  document.querySelectorAll('.sync-dot').forEach(dot => { dot.className = 'sync-dot ' + s; dot.title = STATUS_TEXT[s] || ''; });
   const t = $('syncText');
   if (t) t.textContent = (STATUS_TEXT[s] || '') + (s === 'ok' && CLOUD.last ? ` (${CLOUD.last.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr)` : '');
 }
@@ -1211,12 +1391,20 @@ async function submitAuth(kind, f) {
       if (!v.consent) { setAcctMsg('Bitte der Datenschutzerklärung zustimmen.', true); return; }
     }
     const url = { login: '/api/login', register: '/api/register', recover: '/api/recover' }[kind];
+    if (kind === 'register' && pwScore(v.password) < 2) { setAcctMsg('Bitte ein stärkeres Passwort wählen (länger, mit Zahlen oder Sonderzeichen).', true); return; }
     const body = kind === 'recover' ? { email: v.email, recoveryCode: v.recoveryCode, newPassword: v.newPassword } : { email: v.email, password: v.password };
+    if (kind === 'login' && v.totp) body.totp = v.totp.replace(/\s+/g, '');
     const r = await cloudApi('POST', url, body);
     if (r.status === 0) { setAcctMsg('Der Server ist nicht erreichbar.', true); return; }
+    if (kind === 'login' && r.data && (r.data.error === 'totp_required' || r.data.error === 'bad_totp')) {
+      $('liTotpWrap').classList.remove('hidden'); $('liTotp').required = true; $('liTotp').value = ''; $('liTotp').focus();
+      setAcctMsg(r.data.message, r.data.error === 'bad_totp'); return;
+    }
     if (!r.ok) { setAcctMsg((r.data && r.data.message) || 'Das hat nicht geklappt.', true); return; }
     try { localStorage.setItem('autopot-email', v.email.trim()); } catch (e) { /* ignore */ }
     f.reset();
+    if (kind === 'login') { $('liTotpWrap').classList.add('hidden'); $('liTotp').required = false; }
+    if (kind === 'recover' && r.data.totpReset) toast('Die Zwei-Faktor-Anmeldung wurde zurückgesetzt. Bitte im Konto neu einrichten.', true);
     const code = r.data.recoveryCode;
     const ok = await afterAuth(kind === 'register');
     if (ok && code) showRecovery(code); else if (ok) { closeDlg('accountDlg'); toast('Angemeldet.'); }
@@ -1236,7 +1424,8 @@ async function cloudExport() {
   toast('Cloud-Daten exportiert.');
 }
 function bindAccount() {
-  $('accountBtn').addEventListener('click', () => { renderAccount(); openDlg('accountDlg'); });
+  $('accountBtn').addEventListener('click', () => { renderAccount(); openDlg('accountDlg'); renderSecurity(); });
+  bindSecurity();
   document.querySelectorAll('#acctTabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   [['login', 'loginForm'], ['register', 'registerForm'], ['recover', 'recoverForm']].forEach(([k, id]) => $(id).addEventListener('submit', ev => { ev.preventDefault(); submitAuth(k, $(id)); }));
   $('recoveryOk').addEventListener('change', () => { $('recoveryDone').disabled = !$('recoveryOk').checked; });
@@ -1257,12 +1446,77 @@ function bindAccount() {
   $('delForm').addEventListener('submit', async ev => {
     ev.preventDefault();
     if (!confirm('Konto und alle Cloud-Daten endgültig löschen? Das kann nicht rückgängig gemacht werden.')) return;
-    const r = await cloudApi('DELETE', '/api/account', { password: formVals($('delForm')).password });
+    const dv = formVals($('delForm'));
+    const r = await cloudApi('DELETE', '/api/account', { password: dv.password, code: dv.code || undefined });
     if (!r.ok) { toast((r.data && r.data.message) || 'Löschen fehlgeschlagen.', true); return; }
     CLOUD.user = null; await wipeLocal(); toast('Konto gelöscht.'); location.replace(location.pathname);
   });
   const em = (() => { try { return localStorage.getItem('autopot-email') || ''; } catch (e) { return ''; } })();
   if (em) { document.querySelectorAll('#loginForm [name=email], #recoverForm [name=email]').forEach(i => { i.value = em; }); }
+}
+
+/* ---------- Sicherheit im Konto-Dialog: 2FA, Geräte, Protokoll ---------- */
+const EVENT_LABELS = { register: 'Konto erstellt', login: 'Anmeldung', login_failed: 'Fehlgeschlagene Anmeldung', totp_failed: 'Falscher Zwei-Faktor-Code', recovery_used: 'Passwort per Wiederherstellungscode zurückgesetzt', password_changed: 'Passwort geändert', '2fa_enabled': 'Zwei-Faktor-Anmeldung aktiviert', '2fa_disabled': 'Zwei-Faktor-Anmeldung deaktiviert', session_revoked: 'Ein Gerät abgemeldet', sessions_revoked: 'Alle anderen Geräte abgemeldet', export: 'Alle Daten exportiert' };
+const BAD_EVENTS = new Set(['login_failed', 'totp_failed']);
+const fmtDT = t => new Date(t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' });
+async function renderSecurity() {
+  if (!CLOUD.user) return;
+  const [me, ss, lg] = await Promise.all([cloudApi('GET', '/api/me'), cloudApi('GET', '/api/sessions'), cloudApi('GET', '/api/security-log')]);
+  if (me.ok) {
+    CLOUD.totp = !!me.data.totp;
+    $('tfaState').innerHTML = CLOUD.totp ? '<span class="chip ok">aktiv</span> Beim Anmelden wird zusätzlich ein Code aus deiner Authenticator-App abgefragt.' : '<span class="chip warn">aus</span> Empfohlen: Schützt dein Konto auch dann, wenn jemand dein Passwort kennt.';
+    $('tfaStart').classList.toggle('hidden', CLOUD.totp || !$('tfaSetup').classList.contains('hidden'));
+    $('tfaOffForm').classList.toggle('hidden', !CLOUD.totp);
+    $('delCodeWrap').classList.toggle('hidden', !CLOUD.totp);
+    $('delCode').required = CLOUD.totp;
+  }
+  if (ss.ok) {
+    const list = ss.data.sessions;
+    $('sessList').innerHTML = list.map(x => `<div class="item"><div><strong>${esc(x.label)}</strong>${x.current ? ' <span class="chip ok">dieses Gerät</span>' : ''}<p class="meta">angemeldet ${esc(fmtDT(x.createdAt))} · zuletzt aktiv ${esc(fmtDT(x.lastSeen))}</p></div>${x.current ? '' : `<button class="btn small danger" data-sess="${esc(x.id)}" type="button">Abmelden</button>`}</div>`).join('');
+    $('sessOthers').classList.toggle('hidden', list.length < 2);
+    $('sessCount').textContent = `(${list.length})`;
+  }
+  if (lg.ok) {
+    const ev = lg.data.events;
+    const bad = ev.filter(e => BAD_EVENTS.has(e.type) && Date.now() - e.at < 7 * 864e5).length;
+    $('secLog').innerHTML = (bad ? `<div class="notice warn"><span>${bad} fehlgeschlagene Anmeldeversuche in den letzten 7 Tagen. Wenn du das nicht warst: Passwort ändern und Zwei-Faktor-Anmeldung aktivieren.</span></div>` : '') +
+      (ev.map(e => `<div class="logrow${BAD_EVENTS.has(e.type) ? ' bad' : ''}"><span>${esc(EVENT_LABELS[e.type] || e.type)}</span><span class="sub">${esc(fmtDT(e.at))}</span></div>`).join('') || '<p class="sub">Noch keine Einträge.</p>');
+  }
+}
+function bindSecurity() {
+  $('tfaStart').addEventListener('click', async () => {
+    const r = await cloudApi('POST', '/api/2fa/setup');
+    if (!r.ok) { toast((r.data && r.data.message) || 'Einrichtung nicht möglich.', true); return; }
+    try { $('tfaQr').innerHTML = window.AutoPotQR ? window.AutoPotQR.svg(r.data.uri, { label: 'QR-Code für die Authenticator-App' }) : ''; } catch (e) { $('tfaQr').innerHTML = ''; }
+    $('tfaSecret').textContent = r.data.secret.match(/.{1,4}/g).join(' ');
+    $('tfaLink').href = r.data.uri;
+    $('tfaSetup').classList.remove('hidden'); $('tfaStart').classList.add('hidden');
+    $('tfaCode').value = ''; $('tfaCode').focus();
+  });
+  $('tfaEnableForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const r = await cloudApi('POST', '/api/2fa/enable', { code: $('tfaCode').value.trim() });
+    if (!r.ok) { toast((r.data && r.data.message) || 'Der Code stimmt nicht.', true); return; }
+    $('tfaSetup').classList.add('hidden'); $('tfaQr').innerHTML = ''; $('tfaSecret').textContent = '';
+    toast('Zwei-Faktor-Anmeldung ist aktiv.'); renderSecurity();
+  });
+  $('tfaCancel').addEventListener('click', () => { $('tfaSetup').classList.add('hidden'); $('tfaQr').innerHTML = ''; renderSecurity(); });
+  $('tfaOffForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const v = formVals($('tfaOffForm'));
+    const r = await cloudApi('POST', '/api/2fa/disable', { password: v.password, code: v.code });
+    if (!r.ok) { toast((r.data && r.data.message) || 'Deaktivieren fehlgeschlagen.', true); return; }
+    $('tfaOffForm').reset(); toast('Zwei-Faktor-Anmeldung deaktiviert.'); renderSecurity();
+  });
+  $('sessList').addEventListener('click', async ev => {
+    const b = ev.target.closest('[data-sess]'); if (!b) return;
+    const r = await cloudApi('DELETE', '/api/sessions/' + b.dataset.sess);
+    toast(r.ok ? 'Gerät abgemeldet.' : 'Abmelden fehlgeschlagen.', !r.ok); renderSecurity();
+  });
+  $('sessOthers').addEventListener('click', async () => {
+    const r = await cloudApi('DELETE', '/api/sessions/others');
+    toast(r.ok ? `${r.data.removed} Gerät(e) abgemeldet.` : 'Abmelden fehlgeschlagen.', !r.ok); renderSecurity();
+  });
 }
 
 /* ---------- Events ---------- */
@@ -1280,9 +1534,21 @@ document.addEventListener('click', ev => {
       $('fTags').value = cur.join(', ').slice(0, 120);
       break;
     }
-    case 'del-entry':
-      if (confirm('Diesen Eintrag löschen?')) { S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id); if (editingId === id) resetForm(); save(); renderAll(); }
+    case 'del-entry': {
+      const removed = S.entries.find(e => e.id === id);
+      if (!removed) break;
+      const photo = photoCache.get(id);
+      S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id);
+      if (editingId === id) resetForm();
+      save(); renderAll();
+      toast(`Eintrag vom ${fmtDate(removed.date)} gelöscht.`, false, { label: 'Rückgängig', fn: async () => {
+        if (S.entries.some(e => e.id === id)) return;
+        S.entries.push(removed);
+        if (photo) { photoCache.set(id, photo); if (idb) { try { await idbRun('readwrite', st => st.put(photo, id)); } catch (e) { /* nur im Speicher */ } } }
+        save(); renderAll(); toast('Eintrag wiederhergestellt.');
+      } });
       break;
+    }
     case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); save(); renderLists(); break;
     case 'del-event': S.events = S.events.filter(r => r.id !== id); save(); renderLists(); break;
     case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); save(); renderArchive(); break;
@@ -1364,7 +1630,29 @@ async function init() {
   });
 
   $('exportCsv').addEventListener('click', () => { closeDlg('dataDlg'); exportCsv(); });
-  $('backupJson').addEventListener('click', () => { closeDlg('dataDlg'); exportJson(); });
+  $('bkEncrypt').addEventListener('change', () => { $('bkPwWrap').classList.toggle('hidden', !$('bkEncrypt').checked); });
+  $('backupJson').addEventListener('click', async () => {
+    let pw = '';
+    if ($('bkEncrypt').checked) {
+      pw = $('bkPw').value;
+      if (pw.length < 8) { toast('Backup-Passwort: mindestens 8 Zeichen.', true); return; }
+      if (pw !== $('bkPw2').value) { toast('Die Backup-Passwörter stimmen nicht überein.', true); return; }
+    }
+    closeDlg('dataDlg');
+    if (await exportJson(pw)) { $('bkPw').value = ''; $('bkPw2').value = ''; }
+  });
+  $('pwAskForm').addEventListener('submit', ev => { ev.preventDefault(); finishAsk($('pwAskInput').value); });
+  $('pwAskCancel').addEventListener('click', () => finishAsk(null));
+  $('pwAsk').addEventListener('close', () => { if (pwAskResolve) finishAsk(null); });
+  $('fillLast').addEventListener('click', fillLast);
+  $('nutriSearch').addEventListener('input', renderKnowledge);
+  try { const pwr = JSON.parse(localStorage.getItem('autopot-power') || 'null'); if (pwr) { $('pwWatt').value = pwr.w; $('pwExtra').value = pwr.extra; $('pwPrice').value = pwr.price; } } catch (e) { /* ignore */ }
+  if (!num($('pwWatt').value) && S.harvest.watt) $('pwWatt').value = S.harvest.watt;
+  ['pwWatt', 'pwExtra', 'pwPrice'].forEach(id => $(id).addEventListener('input', renderPower));
+  $('pwHours').addEventListener('input', () => { $('pwHours').dataset.touched = '1'; renderPower(); });
+  ['sLight', 'sFlowerWeeks', 'sFlowerStart'].forEach(id => $(id).addEventListener('input', onSettings));
+  bindPwMeters();
+  renderKnowledge(); renderPower();
   $('exportIcs').addEventListener('click', exportIcs);
   $('restorePrev').addEventListener('click', restorePrev);
   $('importFile').addEventListener('change', ev => { closeDlg('dataDlg'); if (ev.target.files[0]) importFile(ev.target.files[0]); ev.target.value = ''; });

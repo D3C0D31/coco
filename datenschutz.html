@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Datenschutz – AutoPot Grow</title>
+<script src="theme-init.js" data-key="autopot-theme"></script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav"><div class="wrap nav-in"><a class="brand" href="./"><span class="logo" aria-hidden="true">🌱</span>AutoPot Grow</a><div class="nav-cta"><a class="btn" href="./">← Zur Startseite</a></div></div></header>
+<main class="wrap legal">
+<h1>Datenschutzerklärung</h1>
+<p class="todo"><strong>Vorlage, keine Rechtsberatung:</strong> Diese Erklärung beschreibt, wie die Software tatsächlich arbeitet. Verantwortlicher, Hosting-Anbieter und Kontakt müssen vom Betreiber eingetragen und der Text vor dem Livegang rechtlich geprüft werden.</p>
+<h2>1. Verantwortlicher</h2>
+<p>[Name, Anschrift, E-Mail des Betreibers, siehe <a href="impressum.html">Impressum</a>]</p>
+<h2>2. Nutzung ohne Konto</h2>
+<p>Ohne Konto werden alle Eingaben (Messwerte, Notizen, Fotos) ausschließlich im Speicher deines Browsers (localStorage, IndexedDB) abgelegt. Sie werden nicht an den Server übertragen.</p>
+<h2>3. Konto und Cloud-Synchronisation</h2>
+<p>Bei der Registrierung verarbeiten wir deine E-Mail-Adresse und dein Passwort (Rechtsgrundlage: Vertragserfüllung, Art. 6 Abs. 1 lit. b DSGVO).</p>
+<ul>
+<li><strong>E-Mail-Adresse:</strong> wird nicht im Klartext gespeichert, sondern nur als nicht umkehrbarer Prüfwert (HMAC-SHA-256 mit geheimem Serverschlüssel), um dich beim Anmelden wiederzuerkennen. Der Server kann dir deshalb auch keine E-Mails senden.</li>
+<li><strong>Passwort:</strong> wird nur als scrypt-Ableitung geprüft, nie im Klartext gespeichert.</li>
+<li><strong>Nutzerdaten</strong> (Messwerte, Notizen, Einstellungen, Fotos): werden mit einem zufälligen, nutzerbezogenen Schlüssel per AES-256-GCM verschlüsselt gespeichert. Dieser Schlüssel ist durch dein Passwort und deinen Wiederherstellungscode geschützt.</li>
+<li><strong>Sitzungen:</strong> ein zufälliges Token im Cookie („autopot“ bzw. „__Host-autopot“, HttpOnly, SameSite=Strict, Laufzeit bis zu 30 Tage) hält dich angemeldet. Es ist technisch erforderlich und braucht keine Einwilligung.</li>
+</ul>
+<h2>4. Server-Protokolle</h2>
+<p>[Betreiber: Hier eintragen, ob und wie lange dein Hoster IP-Adressen in Zugriffsprotokollen speichert.] Die Anwendung selbst schreibt keine IP-Adressen in die Datenbank. Zur Missbrauchsabwehr werden IP-Adressen kurzzeitig im Arbeitsspeicher gezählt.</p>
+<h2>5. Keine Weitergabe, kein Tracking</h2>
+<p>Es werden keine Analyse-, Werbe- oder Social-Media-Dienste eingebunden und keine Schriften oder Skripte von Dritten geladen.</p>
+<h2>6. Speicherdauer und Löschung</h2>
+<p>Deine Daten bleiben bis zur Löschung deines Kontos gespeichert. In der App kannst du dein Konto samt aller Daten jederzeit selbst und endgültig löschen („Konto &amp; Cloud“ → „Konto löschen“).</p>
+<h2>7. Deine Rechte</h2>
+<p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und Widerspruch sowie das Recht auf Beschwerde bei einer Datenschutzaufsichtsbehörde. Auskunft und Datenübertragbarkeit erhältst du direkt in der App über „Alle Cloud-Daten exportieren“.</p>
+<h2>8. Gesundheit der Daten: dein Wiederherstellungscode</h2>
+<p>Weil die Daten verschlüsselt sind, kann auch der Betreiber sie ohne dein Passwort oder deinen Wiederherstellungscode nicht wiederherstellen.</p>
+</main>
+<script src="site.js"></script>
+</body>
+</html>

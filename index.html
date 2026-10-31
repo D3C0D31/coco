@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#09100c">
+<meta name="description" content="AutoPot Grow: das Grow-Tagebuch für passive AutoPot-Systeme mit Messwerten, Diagrammen, Fotos und Ernte-Auswertung. Verschlüsselt gespeichert, auf allen Geräten synchron.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>AutoPot Grow – dein verschlüsseltes Grow-Tagebuch</title>
+<script src="theme-init.js" data-key="autopot-theme"></script>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="./"><span class="logo" aria-hidden="true">🌱</span>AutoPot Grow</a>
+    <nav class="links" aria-label="Seitennavigation">
+      <a href="#features">Funktionen</a><a href="#ablauf">So geht’s</a><a href="#sicherheit">Sicherheit</a><a href="#faq">FAQ</a><a href="anleitung.html">Anleitung</a>
+    </nav>
+    <div class="nav-cta">
+      <button class="btn icon-btn" id="themeBtn" type="button" aria-label="Farbschema wechseln">🌙</button>
+      <a class="btn" data-login href="app.html?mode=login">Anmelden</a>
+      <a class="btn primary" data-needs-reg href="app.html?mode=register">Kostenlos starten</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero wrap">
+  <span class="pill">🔒 Verschlüsselt gespeichert · auch offline nutzbar</span>
+  <h1>Dein Grow. <span class="grad">Lückenlos dokumentiert.</span> Überall dabei.</h1>
+  <p class="lead">Messwerte, Diagramme, Fotos und Ernte-Auswertung für dein passives AutoPot-System. Alles läuft auf Handy und Rechner, ohne App-Store, und deine Daten werden verschlüsselt gespeichert.</p>
+  <div class="cta">
+    <a class="btn primary big" data-needs-reg href="app.html?mode=register">Konto erstellen – kostenlos</a>
+    <a class="btn big" href="app.html">Ohne Konto ausprobieren</a>
+  </div>
+  <p class="fine">Ohne Konto bleiben alle Daten nur in deinem Browser. Mit Konto werden sie synchronisiert.</p>
+  <div class="shots rv">
+    <div class="frame">
+      <div class="bar"><i></i><i></i><i></i><span>autopot-grow · Übersicht</span></div>
+      <img class="dark-only" src="img/preview-dark.jpg" width="1280" height="860" alt="Übersicht der App mit Tageszähler, Score und Kennzahlen im Dunkelmodus">
+      <img class="light-only" src="img/preview-light.jpg" width="1280" height="860" alt="Übersicht der App mit Tageszähler, Score und Kennzahlen im Hellmodus">
+    </div>
+    <div class="phone"><img src="img/preview-mobile.jpg" width="390" height="844" alt="Die App auf dem Smartphone"></div>
+  </div>
+</section>
+
+<section class="block wrap" id="features">
+  <div class="center rv"><p class="eyebrow">Funktionen</p><h2 class="title">Alles, was ein Grow-Tagebuch können muss</h2><p class="sub">Entwickelt für passive AutoPot-Systeme mit Coco/Perlite und mineralischem Dünger, mit den Richtwerten aus der Anleitung hinterlegt.</p></div>
+  <div class="grid">
+    <div class="card rv"><div class="ic">📅</div><h3>Tag &amp; Woche im Blick</h3><p>Startdatum setzen, die App zählt Tage und Wochen. Phasenwechsel landen automatisch in der Timeline.</p></div>
+    <div class="card rv"><div class="ic">🎯</div><h3>Grow-Score</h3><p>Wie viele deiner Messwerte liegen im Zielbereich der aktuellen Phase? Ein Wert, der sofort zeigt, wo du stehst.</p></div>
+    <div class="card rv"><div class="ic">📈</div><h3>Diagramme mit Zielband</h3><p>EC, pH, VPD, Klima, Licht, Verbrauch und Höhe. Zeitraum wählbar, Werte per Fingertipp.</p></div>
+    <div class="card rv"><div class="ic">📸</div><h3>Foto-Galerie</h3><p>Fotos pro Eintrag, verkleinert und verschlüsselt gespeichert. Ein Wachstums-Zeitraffer im Vollbild.</p></div>
+    <div class="card rv"><div class="ic">🧮</div><h3>Rechner &amp; VPD-Heatmap</h3><p>VPD, EC/Dünger, pH, Teilwasserwechsel, EC⇄PPM und DLI. Dazu eine Heatmap für das ideale Klima.</p></div>
+    <div class="card rv"><div class="ic">💧</div><h3>Tank-Assistent</h3><p>Restlaufzeit, Tankwechsel-Intervall und Warnungen, bevor der Tank leer ist.</p></div>
+    <div class="card rv"><div class="ic">🌾</div><h3>Ernte &amp; Archiv</h3><p>Ertrag, Trocknungsverlust und g/W. Grows abschließen, archivieren und neu starten.</p></div>
+    <div class="card rv"><div class="ic">⏰</div><h3>Erinnerungen</h3><p>Aufgaben mit Wiederholung, auch als Kalenderdatei (.ics) für dein Handy-Kalender.</p></div>
+    <div class="card rv"><div class="ic">📴</div><h3>Auch offline</h3><p>Als App installierbar und ohne Netz nutzbar. Änderungen werden später automatisch synchronisiert.</p></div>
+  </div>
+</section>
+
+<section class="block wrap" id="ablauf">
+  <div class="center rv"><p class="eyebrow">So geht’s</p><h2 class="title">In einer Minute startklar</h2></div>
+  <div class="steps">
+    <div class="step rv"><h3>Konto erstellen</h3><p>E-Mail und Passwort genügen. Du bekommst einen Wiederherstellungscode für den Notfall.</p></div>
+    <div class="step rv"><h3>Messen &amp; eintragen</h3><p>pH, EC, Klima und ein Foto in wenigen Sekunden. Die App bewertet sofort gegen die Richtwerte.</p></div>
+    <div class="step rv"><h3>Auf dem Handy installieren</h3><p>Seite öffnen, „Installieren“ oder „Zum Home-Bildschirm“ wählen. Fertig, ganz ohne Store.</p></div>
+  </div>
+</section>
+
+<section class="block wrap" id="sicherheit">
+  <div class="sec">
+    <div class="rv">
+      <p class="eyebrow">Sicherheit &amp; Datenschutz</p>
+      <h2 class="title">Deine Daten gehören dir</h2>
+      <ul class="checks">
+        <li><span><b>Verschlüsselt gespeichert.</b> Messwerte, Notizen und Fotos liegen mit AES-256-GCM verschlüsselt in der Datenbank.</span></li>
+        <li><span><b>Eigener Schlüssel pro Nutzer.</b> Er wird aus deinem Passwort geschützt. Ohne Passwort, Wiederherstellungscode oder aktive Sitzung ist die Datenbank allein wertlos.</span></li>
+        <li><span><b>Keine Klartext-Adressen.</b> Deine E-Mail steht nur als Prüfwert (HMAC) in der Datenbank, nicht im Klartext.</span></li>
+        <li><span><b>Passwörter nie im Klartext.</b> Gesichert mit scrypt, mit Sperre nach Fehlversuchen und Begrenzung der Anfragen.</span></li>
+        <li><span><b>Keine Werbung, kein Tracking.</b> Keine Cookies außer dem Anmelde-Cookie, keine Drittanbieter-Skripte.</span></li>
+        <li><span><b>Export und Löschen jederzeit.</b> Alle Daten als Datei herunterladen oder das Konto samt Daten endgültig löschen.</span></li>
+      </ul>
+      <p class="honest"><b>Ehrlich gesagt:</b> Beim Anmelden verarbeitet der Server dein Passwort kurz im Arbeitsspeicher, um den Schlüssel freizuschalten. Es handelt sich deshalb um Verschlüsselung der gespeicherten Daten, nicht um Ende-zu-Ende-Verschlüsselung gegenüber dem Betreiber. Das Passwort zusammen mit dem Wiederherstellungscode zu verlieren bedeutet, dass die Daten nicht mehr lesbar sind.</p>
+    </div>
+    <div class="flow rv" aria-label="Schema der Verschlüsselung">
+      <div class="n"><b>1 · Dein Passwort</b><code>scrypt (N=32768) → Schlüssel-Kette</code></div>
+      <div class="arrow">↓</div>
+      <div class="n"><b>2 · Passwort-Schlüssel</b><code>entpackt deinen Daten-Schlüssel</code></div>
+      <div class="arrow">↓</div>
+      <div class="n"><b>3 · Daten-Schlüssel (zufällig, 256 Bit)</b><code>AES-256-GCM pro Datensatz</code></div>
+      <div class="arrow">↓</div>
+      <div class="n"><b>4 · Verschlüsselte Datenbank</b><code>Messwerte · Notizen · Fotos</code></div>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" id="faq">
+  <div class="center rv"><p class="eyebrow">FAQ</p><h2 class="title">Häufige Fragen</h2></div>
+  <div style="max-width:760px;margin:auto">
+    <details class="faq rv"><summary>Kostet das etwas?</summary><p>Nein. Die App ist kostenlos und werbefrei.</p></details>
+    <details class="faq rv"><summary>Brauche ich einen App-Store?</summary><p>Nein. Die Seite lässt sich als App installieren (Android: „App installieren“, iPhone: Teilen → „Zum Home-Bildschirm“) und läuft danach im Vollbild und offline.</p></details>
+    <details class="faq rv"><summary>Was passiert, wenn ich mein Passwort vergesse?</summary><p>Mit dem Wiederherstellungscode, den du bei der Registrierung bekommst, setzt du ein neues Passwort, ohne deine Daten zu verlieren. Ohne Passwort <em>und</em> Code sind die Daten nicht wiederherstellbar. Das ist der Preis echter Verschlüsselung.</p></details>
+    <details class="faq rv"><summary>Funktioniert die App auch ohne Konto?</summary><p>Ja. Ohne Konto bleiben alle Daten im Browser deines Geräts. Sie lassen sich per Backup-Datei sichern und später in ein Konto übernehmen.</p></details>
+    <details class="faq rv"><summary>Kann ich meine Daten mitnehmen?</summary><p>Jederzeit: als JSON-Backup (mit Fotos), als CSV für Excel oder als vollständiger Export aus der Cloud.</p></details>
+    <details class="faq rv"><summary>Für welche Pflanzen und Systeme ist das gedacht?</summary><p>Die Richtwerte stammen aus der mitgelieferten Anleitung für ein passives AutoPot-System (AirBase + AirDome) mit Coco/Perlite. Beachte die geltenden Gesetze deines Landes. Die App ist ein Dokumentationswerkzeug und gibt keine Garantien.</p></details>
+  </div>
+</section>
+
+<section class="wrap" style="padding-bottom:84px">
+  <div class="final rv">
+    <h2>Bereit für deinen nächsten Grow?</h2>
+    <p>Starte kostenlos, in einer Minute eingerichtet.</p>
+    <div class="cta"><a class="btn primary big" data-needs-reg href="app.html?mode=register">Konto erstellen</a><a class="btn big" href="anleitung.html">Anleitung lesen</a></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© AutoPot Grow</span>
+    <nav aria-label="Rechtliches"><a href="datenschutz.html">Datenschutz</a><a href="impressum.html">Impressum</a><a href="anleitung.html">Anleitung</a><a href="app.html">App öffnen</a></nav>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>

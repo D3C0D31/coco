@@ -1,0 +1,18 @@
+# Beispiel für Render.com (Blueprint). Alternativ läuft das Dockerfile auf jedem Docker-Host.
+services:
+  - type: web
+    name: autopot-grow
+    runtime: docker
+    plan: starter            # persistenter Speicher braucht einen bezahlten Plan
+    healthCheckPath: /api/health
+    envVars:
+      - key: TRUST_PROXY
+        value: "1"           # Render terminiert HTTPS vor der App
+      - key: REGISTRATION
+        value: open          # "closed" = keine neuen Konten
+      - key: AUTOPOT_SECRET
+        generateValue: true  # Pepper für den E-Mail-Blindindex – niemals ändern, sonst passen Logins nicht mehr
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

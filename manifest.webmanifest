@@ -1,13 +1,13 @@
 {
-  "name": "AutoPot Grow-App",
+  "name": "AutoPot Grow",
   "short_name": "AutoPot",
   "description": "Messprotokoll, Diagramme und Rechner für ein AutoPot-System mit AirBase und AirDome.",
   "lang": "de",
   "start_url": "app.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#101611",
-  "theme_color": "#2e7d32",
+  "background_color": "#09100c",
+  "theme_color": "#09100c",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

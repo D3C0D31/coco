@@ -1,10 +1,10 @@
 /* Service Worker: macht App und Anleitung offline nutzbar (nur über http/https, nicht bei file://).
    Strategie: Cache zuerst, im Hintergrund aktualisieren. Version hochzählen, wenn sich Dateien ändern. */
-const CACHE = 'autopot-v4-1';
-const ASSETS = ['./', 'app.html', 'anleitung.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+const CACHE = 'autopot-v5-1';
+const ASSETS = ['./', 'app.html', 'app.css', 'app.js', 'theme-init.js', 'anleitung.html', 'anleitung.js', 'index.html', 'site.css', 'site.js', 'datenschutz.html', 'impressum.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => c.add(a).catch(() => {})))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -17,7 +17,9 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  const u = new URL(req.url);
+  /* API-Antworten (Konto, verschlüsselte Daten) werden nie zwischengespeichert */
+  if (req.method !== 'GET' || u.origin !== self.location.origin || u.pathname.startsWith('/api/')) return;
   e.respondWith(
     caches.open(CACHE).then(cache =>
       cache.match(req, { ignoreSearch: true }).then(hit => {

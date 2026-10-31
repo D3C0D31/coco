@@ -1,0 +1,51 @@
+'use strict';
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { DatabaseSync } = require('node:sqlite');
+
+function openDb(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const db = new DatabaseSync(path.join(dir, 'autopot.sqlite'));
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
+    PRAGMA secure_delete = ON;
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email_hash TEXT NOT NULL UNIQUE,
+      salt BLOB NOT NULL, verifier BLOB NOT NULL, wrap_dek BLOB NOT NULL,
+      rec_salt BLOB NOT NULL, wrap_dek_rec BLOB NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      dek_wrapped BLOB NOT NULL,
+      created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, expires_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+    CREATE TABLE IF NOT EXISTS docs (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL, version INTEGER NOT NULL, blob BLOB NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, kind)
+    );
+    CREATE TABLE IF NOT EXISTS photos (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      id TEXT NOT NULL, blob BLOB NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, id)
+    );
+  `);
+  return db;
+}
+
+/* Server-Geheimnis (Pepper für den E-Mail-Blindindex): Umgebungsvariable oder Datei mit 0600 */
+function loadPepper(dir) {
+  if (process.env.AUTOPOT_SECRET && process.env.AUTOPOT_SECRET.length >= 32) return Buffer.from(process.env.AUTOPOT_SECRET);
+  const f = path.join(dir, 'server-secret.key');
+  try { return Buffer.from(fs.readFileSync(f, 'utf8').trim(), 'hex'); } catch (e) { /* neu anlegen */ }
+  const k = crypto.randomBytes(32);
+  fs.writeFileSync(f, k.toString('hex'), { mode: 0o600 });
+  return k;
+}
+module.exports = { openDb, loadPepper };

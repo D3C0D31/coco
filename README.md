@@ -1,53 +1,79 @@
-# coco – AutoPot-Grow
+# AutoPot Grow
 
-Passives AutoPot-System (AirBase + AirDome) auf 50/50 Coco/Perlite mit mineralischer Nährlösung.
-Das Projekt besteht aus zwei voneinander unabhängigen Seiten: der **Anleitung** zum Lesen und Ausdrucken und der **App** zum Protokollieren.
+Grow-Tagebuch für passive AutoPot-Systeme (AirBase + AirDome, 50/50 Coco/Perlite, mineralische Nährlösung) – als Website mit Benutzerkonten und verschlüsselter Cloud-Synchronisation, installierbar als App auf Handy und Rechner.
 
-## Dateien
-
-| Datei | Zweck |
+| Seite | Zweck |
 |---|---|
-| `anleitung.html` | Meisteranleitung (20 Kapitel) mit klickbarem Inhaltsverzeichnis, Dark Mode, druckfreundlich. Enthält keine Daten. |
-| `app.html` | Grow-App: Übersicht mit Tageszähler und Score, Messprotokoll, Diagramme, Galerie, Rechner, Ernte, Rezepte, Timeline, Erinnerungen, Diagnose, Checklisten |
-| `data/autopot-grow-backup.json` | Aktueller Datenstand (Schema v4), in der App über „Import“ ladbar |
-| `data/autopot-grow-log.csv` | Dieselben Messwerte als CSV (Semikolon, UTF-8 mit BOM, Dezimalkomma) |
-| `manifest.webmanifest`, `sw.js`, `icons/` | Installierbare Offline-App (PWA), siehe unten |
-| `tests/smoke.test.js`, `package.json` | Automatischer Browser-Test (`npm install && npm test`) |
+| `/` (`index.html`) | Landingpage mit Funktionen, Sicherheit, FAQ, Registrieren/Anmelden |
+| `/app` (`app.html`) | Die Grow-App (läuft auch ohne Konto, dann nur lokal im Browser) |
+| `/anleitung` (`anleitung.html`) | Meisteranleitung mit 20 Kapiteln, druckfreundlich |
+| `/datenschutz`, `/impressum` | **Vorlagen** – vor dem Livegang ausfüllen und prüfen lassen |
 
-Beide HTML-Dateien funktionieren ohne Server und ohne Internet: einfach im Browser öffnen. Sie verlinken sich gegenseitig (`anleitung.html` ↔ `app.html`), daher im selben Ordner halten.
+## Schnellstart
 
-## Erste Schritte
+Voraussetzung: **Node.js ≥ 22.5**. Es gibt **keine Fremdpakete** – kein `npm install` nötig, um den Server zu betreiben.
 
-1. `app.html` öffnen.
-2. Oben rechts **Daten → Import** wählen und `data/autopot-grow-backup.json` laden. Die App übernimmt Einträge, Einstellungen und Checklisten.
-3. Messwerte im Bereich „Messprotokoll“ eintragen.
+```
+npm start                         # oder: node server/server.js
+# → http://localhost:8080
+```
 
-Wer bereits die alten Dateien `autopot-grow-dashboard.html` oder `grow-command-center.html` im selben Browser genutzt hat, bekommt deren gespeicherte Daten beim ersten Öffnen von `app.html` automatisch übernommen.
+Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ordner sichern, aber nie ins Git einchecken (steht in `.gitignore`).
+
+### Konfiguration (Umgebungsvariablen, siehe `.env.example`)
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `PORT` / `HOST` | `8080` / `0.0.0.0` | Adresse |
+| `DATA_DIR` | `./server-data` | Ort der Datenbank |
+| `REGISTRATION` | `open` | `closed` = keine neuen Konten (z. B. nur für dich und Freunde) |
+| `TRUST_PROXY` | `0` | `1` hinter einem Reverse-Proxy mit HTTPS (Render, Fly, Caddy, nginx). Nötig für `Secure`-Cookies und korrekte IP-Begrenzung |
+| `SESSION_DAYS` | `30` | Laufzeit einer Anmeldung |
+| `AUTOPOT_SECRET` | – | Mind. 32 Zeichen. Ohne Angabe wird `server-secret.key` erzeugt. **Nie nachträglich ändern**, sonst findet der Server die Konten nicht mehr |
+
+## Online stellen
+
+**Pflicht: HTTPS.** Ohne HTTPS sind Passwörter auf dem Weg ungeschützt, und die App lässt sich nicht installieren.
+
+- **Docker (überall):** `docker build -t autopot . && docker run -p 8080:8080 -v autopot-data:/data -e TRUST_PROXY=1 autopot` – davor einen Reverse-Proxy mit HTTPS (z. B. Caddy: `deine-domain.de { reverse_proxy localhost:8080 }`).
+- **Render.com:** `render.yaml` liegt bei (Docker + persistenter Speicher). Persistenter Speicher braucht einen bezahlten Plan; ohne ihn gehen bei jedem Neustart alle Konten verloren.
+- **Nur statisch (GitHub Pages):** funktioniert ebenfalls, dann aber **ohne Konten** – die App merkt das und blendet den Konto-Knopf aus.
+
+Vor dem Livegang: `impressum.html` und `datenschutz.html` mit echten Angaben füllen (Platzhalter in eckigen Klammern) und rechtlich prüfen lassen.
+
+## Sicherheit
+
+| Thema | Umsetzung |
+|---|---|
+| Passwörter | scrypt (N = 2¹⁵, r = 8), nie im Klartext gespeichert; mind. 10 Zeichen |
+| Daten im Ruhezustand | AES-256-GCM mit zufälligem 256-Bit-Schlüssel pro Nutzer (DEK); jeder Datensatz mit eigener Zufalls-IV und Zuordnung zum Nutzer (AAD) |
+| Schlüsselschutz | DEK verschlüsselt mit einem aus dem Passwort abgeleiteten Schlüssel, zusätzlich mit dem Wiederherstellungscode (160 Bit). Pro Sitzung wird der DEK mit einem Schlüssel aus dem Cookie-Token verpackt – in der Datenbank steht nur der Hash des Tokens |
+| E-Mail-Adressen | nur als HMAC-SHA-256-Blindindex gespeichert, nie im Klartext |
+| Sitzungen | 256-Bit-Token, Cookie `HttpOnly`, `SameSite=Strict`, `Secure` + `__Host-`-Präfix unter HTTPS |
+| CSRF | SameSite-Cookie + Pflicht-Header `X-Requested-With` + Origin-Prüfung |
+| Missbrauch | Begrenzung pro IP (Registrierung, Login, Wiederherstellung), Kontosperre 15 min nach 8 Fehlversuchen, gleiche Antwortzeit für unbekannte Konten |
+| Browser | strikte CSP (`script-src 'self'`, keine Inline-Skripte), `nosniff`, `frame-ancestors 'none'`, HSTS unter HTTPS, keine Drittanbieter |
+| Dateifreigabe | Server liefert nur eine feste Liste öffentlicher Dateien aus (Datenbank, Server-Code, Tests sind nicht abrufbar) |
+| Datenschutz | Export aller Daten und endgültiges Löschen des Kontos in der App |
+
+**Grenzen (ehrlich):** Der Server sieht das Passwort beim Anmelden kurz im Arbeitsspeicher. Es ist Verschlüsselung der gespeicherten Daten, keine Ende-zu-Ende-Verschlüsselung gegenüber dem Betreiber. Wer Passwort **und** Wiederherstellungscode verliert, verliert die Daten – das ist gewollt. Der Server kann keine E-Mails senden (er kennt die Adressen nicht), deshalb gibt es kein „Passwort per Mail zurücksetzen“.
+
+## Synchronisation
+
+- Offline zuerst: Die App speichert immer lokal (localStorage, Fotos in IndexedDB) und überträgt Änderungen 1,5 s später verschlüsselt zum Server; offline gesammelte Änderungen werden nachgeholt.
+- Mehrere Geräte: Versionsnummern erkennen gleichzeitige Änderungen; Einträge, Rezepte, Ereignisse, Erinnerungen und Archiv werden dann zusammengeführt, bei Einstellungen gewinnt das Gerät, das zuletzt speichert. Gelöschte Einträge können bei gleichzeitiger Bearbeitung auf einem zweiten Gerät zurückkehren.
+- Fotos werden einzeln übertragen und erst bei Bedarf auf neue Geräte geladen.
+- Beim ersten Anmelden werden vorhandene lokale Daten ins Konto übernommen. Beim Abmelden fragt die App, ob die Daten vom Gerät entfernt werden sollen (auf fremden Geräten: ja). Daten eines anderen Kontos auf demselben Gerät werden nie ins neue Konto übernommen.
+
+## API (kurz)
+
+`POST /api/register | /api/login | /api/recover | /api/logout | /api/password`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `DELETE /api/account`, `GET /api/health | /api/config`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
 
 ## Funktionen der App
 
-- **Übersicht** mit Grow-Name, **Tag-/Wochenzähler**, Phasenleiste, **Grow-Score** (Anteil der Messwerte der letzten 14 Tage im Zielbereich) und **Messserie** (Tage in Folge). Kacheln für pH, EC, VPD und Tank zeigen Zielbereich-Balken und Mini-Verläufe. Dazu automatische Auffälligkeiten (Werte außerhalb des Zielbereichs, alte Einträge, Tank fast leer, Tankwechsel fällig, fehlendes Backup).
-- **Tankwechsel**: „Tank gewechselt“ füllt den Tank, notiert das Ereignis und startet das Wechselintervall.
-- **Phasenwechsel** trägt automatisch einen Timeline-Eintrag ein und setzt den Phasenzähler zurück.
-- **Messprotokoll** mit Pflanzenhöhe, Schnell-Tags, Suche, Phasen- und Foto-Filter.
-- **Galerie** aller Fotos mit Vollbild-Ansicht (Pfeiltasten) als Wachstums-Zeitraffer.
-- **Ernte & Archiv**: Trockengewicht, Trocknungsverlust, g/W und Dauer; „Grow abschließen & neu starten“ lädt zuerst ein Backup, archiviert den Grow und beginnt ein leeres Protokoll (rückgängig machbar).
-- **Bericht drucken** (Übersicht, Protokoll, Diagramme, Galerie, Ernte).
-- **Diagramme** für EC, pH, VPD, Luft- und Wassertemperatur, Luftfeuchte, PPFD und Verbrauch mit grün hinterlegtem Zielbereich. Mit der Maus darüberfahren oder antippen zeigt Datum und Wert. Zeitraum wählbar (7/14/30 Tage, alles); die Wahl wird gemerkt.
-- **Fotos** pro Eintrag (verkleinert auf max. 800 px), gespeichert in IndexedDB.
-- **Erinnerungen** mit Browser-Benachrichtigung (nur bei geöffneter Seite) und **Kalenderexport (.ics)** mit Wiederholung, damit sie auch bei geschlossenem Browser laufen.
-- **Rechner** für VPD, EC/Dünger, pH-Korrektur, Teilwasserwechsel, Tank, **EC ⇄ PPM** (500/640/700), **DLI** (mit Zielbereich aus den PPFD-Richtwerten) und eine **VPD-Heatmap** (Temperatur × Luftfeuchte, optional mit Blatt-Offset, letzter Eintrag markiert).
-- **Mobil**: untere Navigation, „Mehr“-Menü und Plus-Knopf zum schnellen Eintragen. Auf unterstützten Browsern gibt es einen „Installieren“-Knopf.
+Übersicht mit Tageszähler, Phasenleiste, Grow-Score und Messserie · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, VPD-Heatmap) · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
 
-## Daten und Backup
-
-Messwerte und Einstellungen liegen im `localStorage`, Fotos in IndexedDB des Browsers. Beides geht verloren, wenn Browserdaten gelöscht werden oder ein anderer Browser/Rechner genutzt wird. Die App fordert dauerhaften Speicher an, das schützt vor automatischem Aufräumen, ersetzt aber kein Backup.
-
-- **Backup** (Daten-Dialog) exportiert alles als JSON (inklusive Fotos). Die App weist darauf hin, wenn noch kein Backup existiert, das letzte älter als 14 Tage ist oder seitdem 10 neue Einträge hinzugekommen sind.
-- **CSV export** schreibt nur die Messwerte (für Excel/Tabellenkalkulation, letzte Spalte „Höhe“).
-- **Import** erkennt `.json` (ersetzt den Stand nach Rückfrage) und `.csv` (fügt Zeilen hinzu, Duplikate werden übersprungen). **Letzten Import rückgängig machen** im Dashboard holt den Stand davor zurück.
-
-### Schema v4
+### Datenformat (Schema v4)
 
 ```
 { version, settings{name, phase, startDate, phaseStart, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
@@ -56,36 +82,19 @@ Messwerte und Einstellungen liegen im `localStorage`, Fotos in IndexedDB des Bro
   harvest{date, wet, dry, watt, note}, archive[{id, name, start, end, entries, days, wet, dry, watt, avgEc, avgPh}] }
 ```
 
-- v4 ergänzt nur Felder (Startdatum, Tankintervall, Höhe, Ernte, Archiv); Backups aus v3 und älter werden beim Import automatisch ergänzt.
-- Im JSON-Backup tragen Einträge zusätzlich das Feld `photo` (Data-URL); im Browser-Speicher steht nur `hasPhoto`.
-- Der VPD wird nie gespeichert, sondern immer aus `airTemp` und `humidity` berechnet.
-- Erlaubte Phasen: `Jungpflanze / Anwachsen`, `Vegetation`, `Übergang / frühe Blüte`, `Hauptblüte`, `Endphase`. Ältere Bezeichnungen (`VEG`, `Frühe Blüte`, …) werden beim Import automatisch zugeordnet.
-- Alte Feldnamen (`water`, `temp`, `rh`) werden beim Import in `waterTemp`, `airTemp`, `humidity` übersetzt.
-
-## Offline-App (PWA)
-
-Service Worker und „App installieren“ funktionieren nur über `https://` oder `http://localhost`, nicht beim Öffnen per Doppelklick (`file://`). Zum Ausprobieren lokal:
-
-```
-python3 -m http.server 8080      # im Projektordner, dann http://localhost:8080/app.html
-```
-
-Dauerhaft eignet sich z. B. GitHub Pages: Danach lässt sich die App im Browser installieren und läuft auch ohne Netz. Wenn sich Dateien ändern, in `sw.js` den Namen bei `CACHE` hochzählen (aktuell `autopot-v4-1`).
+Backups älterer Versionen werden beim Import ergänzt. `data/autopot-grow-backup.json` enthält den bisherigen Datenstand zum Import.
 
 ## Tests
 
 ```
-npm install      # installiert Playwright
-npm test         # startet einen lokalen Server und prüft Anleitung und App im Browser
+npm install            # nur für die Browser-Tests (Playwright)
+npm test               # Server-Tests, App-Tests, End-to-End mit zwei Geräten
 ```
 
-Optional `CHROME_PATH` auf einen vorhandenen Chrome/Chromium setzen. Der Test deckt u. a. Import/Export, Foto-Speicher, Tooltips, Kalenderexport, Migration alter Formate, Offline-Betrieb und die Mobilansicht ab.
-
-## Hinweise zu den vorhandenen Messwerten
-
-- Beide Einträge (2.–3.10.2026) stehen in Phase *Vegetation*, liegen aber bei EC (0,7–0,8) und PPFD (325–350) unter den Vegetations-Richtwerten (EC 1,1–1,6; PPFD 400–650) und eher im Bereich *Jungpflanze / Anwachsen*. Die App zeigt dazu eine Auffälligkeit an. Bei Bedarf die Phase im Eintrag ändern.
-- Der letzte Eintrag ist mehrere Wochen alt – das Protokoll sollte fortgeführt werden.
+- `tests/server.test.js` – Registrierung, Login, Sperre, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Export, Löschen
+- `tests/smoke.test.js` – App und Anleitung (Import/Export, Fotos, Diagramme, Rechner, Offline, Mobilansicht)
+- `tests/e2e.test.js` – Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Passwortwechsel, Abmelden, Konto löschen
 
 ## Richtwerte
 
-Alle Zielbereiche (pH 5,8–6,2, EC, VPD, Klima, PPFD je Phase) stammen aus der Anleitung (Kapitel 7, 9, 10) und sind Orientierungswerte, keine Garantien. Für die **Endphase** gilt: Klima und VPD wie späte Blüte, EC schrittweise absenken, keine feste PPFD-Vorgabe. Der EC-Rechner nutzt ein grobes Modell (1 ml/L ≈ 0,5 EC); die Herstellerangabe des Düngers hat Vorrang.
+Alle Zielbereiche stammen aus der Anleitung (Kapitel 7, 9, 10) und sind Orientierungswerte ohne Gewähr. Der EC-Rechner nutzt ein grobes Modell (1 ml/L ≈ 0,5 EC); die Herstellerangabe hat Vorrang.

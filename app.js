@@ -1,0 +1,1446 @@
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const KEY = 'autopot-app-v3';
+const PHASES = ['Jungpflanze / Anwachsen', 'Vegetation', 'Übergang / frühe Blüte', 'Hauptblüte', 'Endphase'];
+const PH_RANGE = [5.8, 6.2], WATER_RANGE = [18, 22];
+/* Richtwerte aus der Anleitung (Kap. 7, 9, 10). Endphase: Klima wie späte Blüte (Kap. 9), EC schrittweise abgesenkt, keine feste PPFD-Vorgabe (Kap. 10). */
+const PROFILE = {
+  'Jungpflanze / Anwachsen': { ec: [0.6, 1.0], vpd: [0.8, 1.0], temp: [24, 26], rh: [65, 75], ppfd: [200, 350] },
+  'Vegetation': { ec: [1.1, 1.6], vpd: [1.0, 1.3], temp: [24, 28], rh: [55, 70], ppfd: [400, 650] },
+  'Übergang / frühe Blüte': { ec: [1.5, 1.9], vpd: [1.2, 1.5], temp: [24, 27], rh: [50, 60], ppfd: [650, 850] },
+  'Hauptblüte': { ec: [1.8, 2.3], vpd: [1.4, 1.7], temp: [22, 26], rh: [40, 55], ppfd: [800, 1000] },
+  'Endphase': { ec: [0.8, 2.3], vpd: [1.4, 1.7], temp: [22, 26], rh: [40, 55], ppfd: null }
+};
+const SETUP_CHECKS = ['Root Control Disc korrekt eingelegt', 'AirBase-Kanäle mit Substrat gefüllt', 'AirDome-Schlauch nicht geknickt', 'Rückschlagventil verbaut', 'Trays waagerecht', 'AquaValve-Dichtungen korrekt', 'Tankfilter sauber', 'Substrat nicht verdichtet'];
+const WEEK_CHECKS = ['pH und EC dokumentiert', 'Wassertemperatur geprüft', 'Tankfilter gereinigt', 'Leitungen auf Lecks geprüft', 'AquaValve gesäubert', 'Schädlinge kontrolliert', 'pH-/EC-Meter kalibriert'];
+const SYMPTOMS = [
+  ['tips', 'Verbrannte Blattspitzen'], ['pale', 'Helle neue Triebe'], ['claw', 'Dunkle Krallen'],
+  ['wet', 'Hängend bei nassem Topf'], ['dry', 'Hängend bei leichtem Topf'], ['spots', 'Flecken / trockene Ränder'],
+  ['slow', 'Langsames Wachstum'], ['salt', 'Weiße Krusten / hoher Medium-EC'], ['pest', 'Schädlinge sichtbar'], ['mold', 'Kondenswasser / hohe rF']
+];
+const CAUSES = [
+  { t: 'Salzaufbau / EC zu hoch', s: ['tips', 'salt', 'claw', 'slow'], a: 'Tank-EC und Medium-EC prüfen, Tank-EC moderat absenken, keine weiteren Zusätze geben (Anleitung Kap. 7 und 14). Nicht nur mit reinem Wasser fluten.' },
+  { t: 'Rootzone zu nass / Sauerstoffmangel', s: ['wet', 'slow', 'claw'], a: 'AirBase-Kanäle, AirDome-Schlauch, Substratstruktur, Wassertemperatur und AquaValve-Zyklus prüfen (Kap. 4, 5, 12).' },
+  { t: 'Unterversorgung oder Zulaufproblem', s: ['dry', 'slow'], a: 'Tank, Filter, Leitung, AquaValve und waagerechte Trays prüfen (Kap. 12).' },
+  { t: 'pH-, Ca-/Mg- oder Mikronährstoff-Verfügbarkeit', s: ['pale', 'spots'], a: 'Tank-pH, Wasserhärte, Coco-Buffering und Lampenabstand prüfen (Kap. 3, 7).' },
+  { t: 'Zu viel Stickstoff oder Wurzelstress', s: ['claw', 'wet'], a: 'Tank-EC, N-Anteil im Dünger, Wassertemperatur und Wurzelzone prüfen.' },
+  { t: 'Lichtstress', s: ['tips', 'pale', 'spots'], a: 'PPFD und Lampenabstand mit den Richtwerten vergleichen (Kap. 10); Licht nur schrittweise ändern.' },
+  { t: 'Schädlingsdruck', s: ['pest', 'spots', 'slow'], a: 'Blattunterseiten mit Lupe prüfen, Gelbtafeln kontrollieren, Art sicher bestimmen, bevor etwas gespritzt wird (Kap. 16).' },
+  { t: 'Schimmelrisiko / zu hohe Luftfeuchte', s: ['mold'], a: 'rF senken, Umluft und Entfeuchtung verbessern, stehende Nässe und abgestorbene Blätter entfernen (Kap. 9, 16).' },
+  { t: 'Allgemeine Limitierung', s: ['slow'], a: 'pH, EC, VPD, PPFD und Wasserverbrauch gemeinsam betrachten; immer nur eine Änderung auf einmal (Kap. 19).' }
+];
+const BACKUP_EVERY = 10;
+
+/* ---------- Helfer ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (v == null || String(v).trim() === '') return null;
+  const n = parseFloat(String(v).trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+};
+const nf = (v, d = 2) => (v == null || !Number.isFinite(v)) ? '–' : String(Number(v.toFixed(d))).replace('.', ',');
+const fmtPh = v => (v == null || !Number.isFinite(v)) ? '–' : (Math.abs(v * 10 - Math.round(v * 10)) < 1e-9 ? v.toFixed(1).replace('.', ',') : nf(v, 2));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad2 = n => String(n).padStart(2, '0');
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+const fmtDate = iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : '–'; };
+const shortDate = t => { const d = new Date(t); return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.`; };
+const daysAgo = iso => Math.round((Date.parse(todayStr() + 'T00:00:00') - Date.parse(iso + 'T00:00:00')) / 864e5);
+const calcVpd = (t, rh) => (Number.isFinite(t) && Number.isFinite(rh)) ? Math.max(0, 0.6108 * Math.exp(17.27 * t / (t + 237.3)) * (1 - rh / 100)) : null;
+const vpdOf = e => calcVpd(e.airTemp, e.humidity);
+const IMG_RE = /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+let toastTimer;
+function toast(msg, isErr) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, isErr ? 6000 : 2800);
+}
+
+function normPhase(p) {
+  const s = String(p ?? '').trim().toLowerCase();
+  if (!s) return '';
+  if (/^veg/.test(s)) return 'Vegetation';
+  if (/jung|anwachs|seedling|clone|steck/.test(s)) return PHASES[0];
+  if (/übergang|uebergang|früh|frueh|early|stretch/.test(s)) return PHASES[2];
+  if (/end|flush|ripen|reif/.test(s)) return PHASES[4];
+  if (/haupt|späte|spaete|late|blüte|bluete|flower|bloom/.test(s)) return PHASES[3];
+  return String(p).trim().slice(0, 60);
+}
+
+/* ---------- Datenmodell (Schema v4) ---------- */
+const blank = () => ({
+  version: 4,
+  settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
+  entries: [], recipes: [], events: [], reminders: [],
+  checks: { setup: {}, week: {} },
+  harvest: { date: '', wet: null, dry: null, watt: null, note: '' },
+  archive: []
+});
+
+function normEntry(e) {
+  if (!e || typeof e !== 'object') return null;
+  const date = String(e.date ?? '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const photo = typeof e.photo === 'string' && IMG_RE.test(e.photo) ? e.photo : '';
+  const o = {
+    id: typeof e.id === 'string' && e.id ? e.id.slice(0, 40) : uid(),
+    date, phase: normPhase(e.phase),
+    ec: num(e.ec), ph: num(e.ph),
+    waterTemp: num(e.waterTemp ?? e.water), airTemp: num(e.airTemp ?? e.temp),
+    humidity: num(e.humidity ?? e.rh), ppfd: num(e.ppfd), use: num(e.use), height: num(e.height),
+    tags: String(e.tags ?? '').slice(0, 200), note: String(e.note ?? '').slice(0, 2000),
+    hasPhoto: !!(photo || e.hasPhoto)
+  };
+  if (photo) o.photo = photo;
+  return o;
+}
+const boolMap = (o, len) => { const r = {}; if (o && typeof o === 'object') for (let i = 0; i < len; i++) if (o[i] === true) r[i] = true; return r; };
+
+function normalize(d) {
+  const out = blank();
+  if (!d || typeof d !== 'object') return out;
+  const s = d.settings && typeof d.settings === 'object' ? d.settings : {};
+  out.settings.name = String(s.name ?? s.growName ?? '').slice(0, 60);
+  out.settings.phase = PHASES.includes(normPhase(s.phase)) ? normPhase(s.phase) : 'Vegetation';
+  out.settings.tankSize = num(s.tankSize) ?? 40;
+  out.settings.tankRest = num(s.tankRest) ?? 30;
+  out.settings.dailyUse = num(s.dailyUse) ?? 2;
+  out.settings.lastBackup = typeof s.lastBackup === 'string' ? s.lastBackup : null;
+  out.settings.entriesSinceBackup = Math.max(0, Math.round(num(s.entriesSinceBackup) ?? 0));
+  const dstr = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) ? v.slice(0, 10) : null;
+  out.settings.startDate = dstr(s.startDate); out.settings.phaseStart = dstr(s.phaseStart); out.settings.lastTankChange = dstr(s.lastTankChange);
+  const iv = num(s.tankInterval); out.settings.tankInterval = iv != null && iv >= 1 ? Math.min(365, Math.round(iv)) : 14;
+  out.entries = (Array.isArray(d.entries) ? d.entries : []).map(normEntry).filter(Boolean);
+  out.recipes = (Array.isArray(d.recipes) ? d.recipes : []).filter(r => r && r.name).map(r => ({ id: String(r.id || uid()), name: String(r.name).slice(0, 60), phase: String(r.phase ?? '').slice(0, 60), text: String(r.text ?? '').slice(0, 500) }));
+  out.events = (Array.isArray(d.events) ? d.events : []).filter(e => e && /^\d{4}-\d{2}-\d{2}/.test(e.date || '') && e.title).map(e => ({ id: String(e.id || uid()), date: String(e.date).slice(0, 10), title: String(e.title).slice(0, 80), note: String(e.note ?? '').slice(0, 300) }));
+  out.reminders = (Array.isArray(d.reminders) ? d.reminders : []).filter(r => r && r.title && /^\d{4}-\d{2}-\d{2}/.test(r.date || '')).map(r => ({
+    id: String(r.id || uid()), title: String(r.title).slice(0, 80), date: String(r.date).slice(0, 10),
+    time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : '09:00',
+    repeat: ['daily', 'weekly'].includes(r.repeat) ? r.repeat : 'once',
+    lastDone: typeof r.lastDone === 'string' ? r.lastDone : (r.done === true ? new Date().toISOString() : null),
+    notified: typeof r.notified === 'string' ? r.notified : null
+  }));
+  const c = d.checks && typeof d.checks === 'object' ? d.checks : {};
+  out.checks.setup = boolMap(c.setup ?? d.setupState, SETUP_CHECKS.length);
+  out.checks.week = boolMap(c.week ?? d.weekState, WEEK_CHECKS.length);
+  const hv = d.harvest && typeof d.harvest === 'object' ? d.harvest : {};
+  out.harvest = { date: dstr(hv.date) || '', wet: num(hv.wet), dry: num(hv.dry), watt: num(hv.watt), note: String(hv.note ?? '').slice(0, 300) };
+  out.archive = (Array.isArray(d.archive) ? d.archive : []).filter(a => a && typeof a === 'object').slice(0, 100).map(a => ({
+    id: String(a.id || uid()).slice(0, 40), name: String(a.name ?? 'Grow').slice(0, 60), start: dstr(a.start), end: dstr(a.end),
+    entries: Math.max(0, Math.round(num(a.entries) ?? 0)), days: num(a.days), wet: num(a.wet), dry: num(a.dry), watt: num(a.watt), avgEc: num(a.avgEc), avgPh: num(a.avgPh)
+  }));
+  return out;
+}
+
+const entryKey = e => [e.date, e.phase, e.ec, e.ph, e.airTemp, e.humidity, e.waterTemp].join('|');
+function mergeEntries(base, extra) {
+  const seen = new Set(base.map(entryKey)); let added = 0;
+  extra.forEach(e => { const k = entryKey(e); if (!seen.has(k)) { seen.add(k); base.push(e); added++; } });
+  return added;
+}
+
+function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { /* ignore */ }
+  if (raw) { try { return normalize(JSON.parse(raw)); } catch (e) { /* defekt: Migration versuchen */ } }
+  /* Migration aus Dashboard- und Command-Center-Vorgängern */
+  let s = blank();
+  try {
+    const get = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+    const dash = { entries: get('autopot-entries'), setupState: get('autopot-setup'), weekState: get('autopot-week'), settings: get('autopot-settings') };
+    if (dash.entries || dash.settings) s = normalize(dash);
+    const cc = get('growcc-v2');
+    if (cc && typeof cc === 'object') {
+      const n = normalize(cc);
+      mergeEntries(s.entries, n.entries);
+      s.recipes = s.recipes.concat(n.recipes); s.events = s.events.concat(n.events); s.reminders = s.reminders.concat(n.reminders);
+      if (!s.settings.name) s.settings = Object.assign({}, n.settings, { lastBackup: null });
+    }
+  } catch (e) { /* ignore */ }
+  return s;
+}
+
+let S = load();
+let editingId = null, pendingPhoto = '', photoDirty = false;
+
+/* Zustand ohne Foto-Daten serialisieren (Fotos gehören nie in localStorage) */
+const ser = obj => JSON.stringify(obj, (k, v) => k === 'photo' ? undefined : v);
+function save() {
+  try { localStorage.setItem(KEY, ser(S)); if (typeof scheduleSync === 'function') scheduleSync(); return true; }
+  catch (e) { toast('Speichern fehlgeschlagen (Speicher voll?). Bitte Backup exportieren.', true); return false; }
+}
+
+/* ---------- Foto-Speicher (IndexedDB) ---------- */
+let idb = null;
+const photoCache = new Map();
+function openDb() {
+  return new Promise(res => {
+    if (!('indexedDB' in window)) return res(null);
+    let req;
+    try { req = indexedDB.open('autopot-app', 1); } catch (e) { return res(null); }
+    req.onupgradeneeded = () => { req.result.createObjectStore('photos'); };
+    req.onsuccess = () => res(req.result);
+    req.onerror = req.onblocked = () => res(null);
+  });
+}
+const idbRun = (mode, fn) => new Promise((res, rej) => {
+  if (!idb) return rej(new Error('IndexedDB nicht verfügbar'));
+  let t;
+  try { t = idb.transaction('photos', mode); fn(t.objectStore('photos')); } catch (e) { return rej(e); }
+  t.oncomplete = () => res();
+  t.onerror = t.onabort = () => rej(t.error || new Error('IndexedDB-Fehler'));
+});
+const idbAll = () => new Promise((res, rej) => {
+  if (!idb) return rej(new Error('IndexedDB nicht verfügbar'));
+  const t = idb.transaction('photos', 'readonly'), s = t.objectStore('photos');
+  const k = s.getAllKeys(), v = s.getAll();
+  t.oncomplete = () => res(k.result.map((key, i) => [key, v.result[i]]));
+  t.onerror = t.onabort = () => rej(t.error || new Error('IndexedDB-Fehler'));
+});
+/* Fotos aus importierten Einträgen übernehmen: in IndexedDB schreiben, aus dem Eintrag entfernen */
+async function adoptPhotos(list) {
+  let failed = 0;
+  for (const e of list) {
+    if (typeof e.photo === 'string' && e.photo) {
+      photoCache.set(e.id, e.photo);
+      try { await idbRun('readwrite', s => s.put(e.photo, e.id)); } catch (err) { failed++; }
+      e.hasPhoto = true;
+    }
+    delete e.photo;
+    if (e.hasPhoto && !photoCache.has(e.id) && !readSync().tag) e.hasPhoto = false;
+  }
+  if (failed) toast(`${failed} Foto(s) konnten nicht dauerhaft gespeichert werden und gehen beim Schließen verloren. Bitte Backup exportieren.`, true);
+}
+async function initPhotos() {
+  idb = await openDb();
+  if (idb) {
+    try { (await idbAll()).forEach(([k, v]) => { if (typeof v === 'string' && IMG_RE.test(v)) photoCache.set(String(k), v); }); } catch (e) { /* ignore */ }
+  } else {
+    $('fPhoto').disabled = true;
+    $('fPhoto').title = 'In diesem Browser (z. B. privates Fenster) können keine Fotos gespeichert werden.';
+  }
+  await adoptPhotos(S.entries);
+  save();
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignore */ }
+}
+const dropPhoto = id => { photoCache.delete(id); if (idb) idbRun('readwrite', s => s.delete(id)).catch(() => {}); };
+
+const sorted = () => S.entries.slice().sort((a, b) => a.date.localeCompare(b.date));
+
+/* ---------- Bewertung ---------- */
+function rangeChip(v, r) {
+  if (v == null || !r) return ['–', 'mute'];
+  if (v < r[0]) return ['zu niedrig', 'warn'];
+  if (v > r[1]) return ['zu hoch', 'bad'];
+  return ['im Ziel', 'ok'];
+}
+const rng = (r, unit = '') => r ? `${nf(r[0])}–${nf(r[1])}${unit}` : '–';
+const dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00') - Date.parse(a + 'T00:00:00')) / 864e5);
+const isoOf = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const svp = t => 0.6108 * Math.exp(17.27 * t / (t + 237.3));
+const phaseProfile = e => PROFILE[e && e.phase] || PROFILE[S.settings.phase] || PROFILE.Vegetation;
+
+function tankDays() {
+  const { tankRest: r, dailyUse: u } = S.settings;
+  return (u > 0 && r >= 0) ? Math.floor(r / u) : null;
+}
+function growInfo() {
+  const es = sorted();
+  const start = S.settings.startDate || (es[0] && es[0].date) || null;
+  if (!start) return null;
+  const day = Math.max(1, dayDiff(start, todayStr()) + 1);
+  const ps = S.settings.phaseStart || start;
+  return { start, derived: !S.settings.startDate, day, week: Math.ceil(day / 7), phaseDays: Math.max(1, dayDiff(ps, todayStr()) + 1) };
+}
+/* Grow-Score: Anteil der Messwerte der letzten 14 Tage (sonst des letzten Eintrags), die im Zielbereich liegen */
+function growScore() {
+  const all = sorted();
+  const recent = all.filter(e => daysAgo(e.date) <= 14);
+  const list = recent.length ? recent : all.slice(-1);
+  let ok = 0, n = 0;
+  list.forEach(e => {
+    const p = phaseProfile(e);
+    [[e.ph, PH_RANGE], [e.ec, p.ec], [vpdOf(e), p.vpd], [e.waterTemp, WATER_RANGE], [e.airTemp, p.temp], [e.humidity, p.rh], [e.ppfd, p.ppfd]].forEach(([v, r]) => {
+      if (v == null || !r) return;
+      n++; if (v >= r[0] && v <= r[1]) ok++;
+    });
+  });
+  return n ? Math.round(ok / n * 100) : null;
+}
+function streak() {
+  const days = new Set(S.entries.map(e => e.date));
+  const d = new Date();
+  if (!days.has(isoOf(d))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (days.has(isoOf(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+function findings() {
+  const out = [];
+  const es = sorted();
+  if (!es.length) { out.push(['', 'Noch keine Messwerte – trage unten den ersten Eintrag ein.']); return out; }
+  const e = es[es.length - 1];
+  const age = daysAgo(e.date);
+  if (age >= 3) out.push(['warn', `Der letzte Eintrag ist ${age} Tage alt (${fmtDate(e.date)}). Regelmäßig messen und protokollieren.`]);
+  const pn = PROFILE[e.phase] ? e.phase : S.settings.phase, p = PROFILE[pn];
+  const chk = (label, v, r, unit) => {
+    if (v == null || !r) return;
+    if (v < r[0]) out.push(['warn', `${label} ${nf(v)}${unit} liegt unter dem Zielbereich (${rng(r, unit)}).`]);
+    else if (v > r[1]) out.push(['warn', `${label} ${nf(v)}${unit} liegt über dem Zielbereich (${rng(r, unit)}).`]);
+  };
+  chk('Tank-pH', e.ph, PH_RANGE, '');
+  chk(`Tank-EC (Phase ${pn})`, e.ec, p.ec, '');
+  chk('Wassertemperatur', e.waterTemp, WATER_RANGE, ' °C');
+  chk(`VPD (Phase ${pn})`, vpdOf(e), p.vpd, ' kPa');
+  chk(`Lufttemperatur (Phase ${pn})`, e.airTemp, p.temp, ' °C');
+  chk(`Luftfeuchte (Phase ${pn})`, e.humidity, p.rh, ' %');
+  chk(`PPFD (Phase ${pn})`, e.ppfd, p.ppfd, '');
+  const td = tankDays();
+  if (td != null && td <= 2) out.push(['warn', `Der Tank reicht nur noch etwa ${td} Tag(e). Bald nachfüllen oder wechseln.`]);
+  const tc = S.settings.lastTankChange, iv = S.settings.tankInterval;
+  if (tc && iv && daysAgo(tc) >= iv) out.push(['warn', `Der letzte Tankwechsel war vor ${daysAgo(tc)} Tagen (Intervall ${iv} Tage). Wechsel fällig.`]);
+  if (!out.length) out.push(['ok', 'Letzte Messwerte liegen im Zielbereich.']);
+  const since = S.settings.entriesSinceBackup || 0;
+  if (!S.settings.lastBackup) {
+    out.push(['warn', 'Es wurde noch kein Backup exportiert. Daten liegen nur in diesem Browser.', 'backup']);
+  } else {
+    const b = Math.floor((Date.now() - Date.parse(S.settings.lastBackup)) / 864e5);
+    if (b >= 14) out.push(['warn', `Das letzte Backup ist ${b} Tage alt. Daten liegen nur in diesem Browser.`, 'backup']);
+    else if (since >= BACKUP_EVERY) out.push(['warn', `Seit dem letzten Backup wurden ${since} Einträge hinzugefügt.`, 'backup']);
+  }
+  return out;
+}
+
+/* ---------- Rendering ---------- */
+function fillSelect(sel, withEmpty) {
+  sel.innerHTML = (withEmpty ? '<option value="">–</option>' : '') + PHASES.map(p => `<option>${esc(p)}</option>`).join('');
+}
+const hasPrev = () => { try { return !!localStorage.getItem(KEY + '-prev'); } catch (e) { return false; } };
+const PH_SHORT = ['Jung', 'Vegetation', 'Übergang', 'Blüte', 'Ende'];
+
+function sparkSvg(vals) {
+  vals = vals.filter(v => v != null && Number.isFinite(v)).slice(-12);
+  if (vals.length < 2) return '';
+  const lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
+  const d = vals.map((v, i) => `${i ? 'L' : 'M'}${(i / (vals.length - 1) * 100).toFixed(1)} ${(26 - (v - lo) / sp * 22).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${d} L100 30 L0 30 Z"/><path class="l" d="${d}"/></svg>`;
+}
+function gaugeHtml(v, r) {
+  if (!r) return '';
+  const span = r[1] - r[0] || 1, lo = r[0] - span * 0.8, hi = r[1] + span * 0.8;
+  const pos = v == null ? null : Math.min(100, Math.max(0, (v - lo) / (hi - lo) * 100));
+  return `<div class="gauge" aria-hidden="true"><i class="band" style="left:${(r[0] - lo) / (hi - lo) * 100}%;width:${span / (hi - lo) * 100}%"></i>${pos == null ? '' : `<b style="left:${pos}%"></b>`}</div>`;
+}
+function setState(id, cls) { const el = $(id); if (cls === 'ok' || cls === 'warn' || cls === 'bad') el.dataset.state = cls; else delete el.dataset.state; }
+
+function renderHero() {
+  const gi = growInfo();
+  $('heroName').textContent = S.settings.name || 'Mein Grow';
+  if (gi) {
+    $('heroDay').textContent = `Tag ${gi.day} · Woche ${gi.week}`;
+    $('heroSub').textContent = `${S.settings.phase}${S.settings.phaseStart ? ` seit ${gi.phaseDays} ${gi.phaseDays === 1 ? 'Tag' : 'Tagen'}` : ''} · Start ${fmtDate(gi.start)}${gi.derived ? ' (erster Eintrag)' : ''}`;
+  } else {
+    $('heroDay').textContent = 'Noch kein Start';
+    $('heroSub').textContent = 'Trage unten ein Startdatum ein, dann zählt die App Tage und Wochen.';
+  }
+  const idx = PHASES.indexOf(S.settings.phase);
+  $('phaseSteps').innerHTML = PHASES.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'now' : ''}"${i === idx ? ' aria-current="step"' : ''}><span title="${esc(p)}">${PH_SHORT[i]}</span></li>`).join('');
+  const sc = growScore();
+  $('scoreVal').textContent = sc == null ? '–' : sc;
+  $('ringPg').style.strokeDashoffset = 207.3 * (1 - (sc || 0) / 100);
+  $('scoreRing').setAttribute('aria-label', sc == null ? 'Grow-Score: noch keine Daten' : `Grow-Score ${sc} von 100`);
+  const st = streak();
+  $('streakVal').textContent = st ? `${st >= 3 ? '🔥 ' : ''}${st} ${st === 1 ? 'Tag' : 'Tage'}` : '–';
+  $('entryCount').textContent = S.entries.length;
+}
+
+function renderDashboard() {
+  renderHero();
+  const es = sorted(), e = es[es.length - 1];
+  const pn = e && PROFILE[e.phase] ? e.phase : S.settings.phase, p = PROFILE[pn];
+  const v = e ? vpdOf(e) : null;
+  $('kPh').textContent = e ? fmtPh(e.ph) : '–';
+  $('kPhSub').textContent = `Ziel ${rng(PH_RANGE)} · ${rangeChip(e?.ph, PH_RANGE)[0]}`;
+  $('kEc').textContent = e ? nf(e.ec) : '–';
+  $('kEcSub').textContent = `Ziel ${rng(p.ec)} · ${rangeChip(e?.ec, p.ec)[0]}`;
+  $('kVpd').textContent = v == null ? '–' : nf(v) + ' kPa';
+  $('kVpdSub').textContent = `Ziel ${rng(p.vpd, ' kPa')} · ${rangeChip(v, p.vpd)[0]}`;
+  $('gPh').innerHTML = gaugeHtml(e?.ph, PH_RANGE); $('gEc').innerHTML = gaugeHtml(e?.ec, p.ec); $('gVpd').innerHTML = gaugeHtml(v, p.vpd);
+  $('spPh').innerHTML = sparkSvg(es.map(x => x.ph)); $('spEc').innerHTML = sparkSvg(es.map(x => x.ec)); $('spVpd').innerHTML = sparkSvg(es.map(vpdOf));
+  setState('cardPh', rangeChip(e?.ph, PH_RANGE)[1]); setState('cardEc', rangeChip(e?.ec, p.ec)[1]); setState('cardVpd', rangeChip(v, p.vpd)[1]);
+  const td = tankDays();
+  if (td != null) {
+    $('kTank').textContent = td + ' Tage';
+    const d = new Date(); d.setDate(d.getDate() + td);
+    $('kTankSub').textContent = 'leer ca. ' + d.toLocaleDateString('de-DE');
+    const pct = S.settings.tankSize > 0 ? Math.max(0, Math.min(100, S.settings.tankRest / S.settings.tankSize * 100)) : 0;
+    $('gTank').innerHTML = `<div class="gauge" aria-hidden="true"><i class="band" style="left:0;width:${pct}%${pct < 15 ? ';background:var(--orange)' : ''}"></i></div>`;
+    setState('cardTank', td <= 2 ? 'bad' : td <= 4 ? 'warn' : 'ok');
+  } else { $('kTank').textContent = '–'; $('kTankSub').textContent = 'Verbrauch eintragen'; $('gTank').innerHTML = ''; setState('cardTank', ''); }
+  $('kLast').textContent = e ? fmtDate(e.date) : '–';
+  $('kLastSub').textContent = e ? (daysAgo(e.date) === 0 ? 'heute' : `vor ${daysAgo(e.date)} Tagen`) : 'keine Einträge';
+  const sd = SETUP_CHECKS.filter((_, i) => S.checks.setup[i]).length, wd = WEEK_CHECKS.filter((_, i) => S.checks.week[i]).length;
+  $('kChecks').textContent = `${Math.round(sd / SETUP_CHECKS.length * 100)} % / ${Math.round(wd / WEEK_CHECKS.length * 100)} %`;
+  const ACTIONS = { backup: 'Jetzt sichern' };
+  $('findings').innerHTML = findings().map(([c, m, a]) => `<div class="notice ${c}"><span>${esc(m)}</span>${a ? `<button class="btn small primary" data-act="${a}" type="button">${ACTIONS[a]}</button>` : ''}</div>`).join('');
+  $('phaseHint').textContent = S.settings.phase === 'Endphase' ? 'Endphase: Klima und VPD wie späte Blüte, EC schrittweise absenken (Anleitung Kap. 7 und 9). Für PPFD gibt es keine feste Vorgabe.' : '';
+  const tc = S.settings.lastTankChange;
+  $('tankInfo').textContent = tc ? `Letzter Tankwechsel: ${fmtDate(tc)} (${daysAgo(tc) === 0 ? 'heute' : `vor ${daysAgo(tc)} Tagen`}), Intervall ${S.settings.tankInterval} Tage.` : 'Noch kein Tankwechsel notiert. Mit „Tank gewechselt“ oben festhalten.';
+  $('backupState').textContent = S.settings.lastBackup ? `Letztes Backup: ${fmtDate(S.settings.lastBackup.slice(0, 10))}` : 'Noch kein Backup erstellt.';
+  $('restorePrev').classList.toggle('hidden', !hasPrev());
+}
+
+const LF = { q: '', phase: '', photo: false, limit: 25 };
+function filteredEntries() {
+  const q = LF.q.trim().toLowerCase();
+  return sorted().reverse().filter(e => {
+    if (LF.phase && e.phase !== LF.phase) return false;
+    if (LF.photo && !photoCache.has(e.id)) return false;
+    if (q && !`${e.note} ${e.tags} ${fmtDate(e.date)} ${e.date} ${e.phase}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function renderLog() {
+  const body = $('logBody');
+  const all = filteredEntries(), es = all.slice(0, LF.limit);
+  $('logMore').classList.toggle('hidden', all.length <= LF.limit);
+  $('logCount').textContent = S.entries.length ? `${all.length} von ${S.entries.length} Einträgen` : '';
+  if (!es.length) { body.innerHTML = `<tr><td colspan="14">${S.entries.length ? 'Keine Treffer für diesen Filter.' : 'Noch keine Einträge.'}</td></tr>`; return; }
+  body.innerHTML = es.map(e => {
+    const v = vpdOf(e), photo = photoCache.get(e.id);
+    return `<tr><td class="num">${esc(fmtDate(e.date))}</td><td>${esc(e.phase || '–')}</td><td class="num">${nf(e.ec)}</td><td class="num">${fmtPh(e.ph)}</td><td class="num">${nf(e.waterTemp, 1)}</td><td class="num">${nf(e.airTemp, 1)}</td><td class="num">${nf(e.humidity, 0)}</td><td class="num">${nf(v)}</td><td class="num">${nf(e.ppfd, 0)}</td><td class="num">${nf(e.use, 1)}</td><td class="num">${nf(e.height, 1)}</td><td>${e.tags ? `<em>${esc(e.tags)}</em><br>` : ''}${esc(e.note)}</td><td>${photo ? `<img class="thumb" data-act="lightbox" data-id="${esc(e.id)}" src="${photo}" alt="Foto vom ${esc(fmtDate(e.date))}">` : ''}</td><td class="num"><button class="btn small" data-act="edit" data-id="${esc(e.id)}" type="button">✎</button> <button class="btn small danger" data-act="del-entry" data-id="${esc(e.id)}" type="button" aria-label="Eintrag löschen">✕</button></td></tr>`;
+  }).join('');
+}
+function renderGallery() {
+  const list = sorted().reverse().filter(e => photoCache.has(e.id));
+  $('galleryGrid').innerHTML = list.map(e => `<button class="gthumb" type="button" data-act="lightbox" data-id="${esc(e.id)}"><img src="${photoCache.get(e.id)}" alt="Foto vom ${esc(fmtDate(e.date))}" loading="lazy"><span>${esc(fmtDate(e.date))}${e.height != null ? ' · ' + nf(e.height, 1) + ' cm' : ''}</span></button>`).join('');
+  $('galleryEmpty').classList.toggle('hidden', list.length > 0);
+}
+
+/* ---------- Diagramme ---------- */
+const CHARTS = [
+  { id: 'cEc', get: e => e.ec, color: '--blue', band: p => p.ec, dec: 2, unit: '' },
+  { id: 'cPh', get: e => e.ph, color: '--green', band: () => PH_RANGE, dec: 2, unit: '' },
+  { id: 'cVpd', get: vpdOf, color: '--violet', band: p => p.vpd, dec: 2, unit: ' kPa' },
+  { id: 'cAir', get: e => e.airTemp, color: '--orange', band: p => p.temp, dec: 1, unit: ' °C' },
+  { id: 'cRh', get: e => e.humidity, color: '--cyan', band: p => p.rh, dec: 0, unit: ' %' },
+  { id: 'cWater', get: e => e.waterTemp, color: '--blue', band: () => WATER_RANGE, dec: 1, unit: ' °C' },
+  { id: 'cPpfd', get: e => e.ppfd, color: '--orange', band: p => p.ppfd, dec: 0, unit: '' },
+  { id: 'cUse', get: e => e.use, color: '--cyan', band: () => null, dec: 1, unit: ' L' },
+  { id: 'cHeight', get: e => e.height, color: '--violet', band: () => null, dec: 1, unit: ' cm' }
+];
+let rangeDays = 0;
+try { const r = parseInt(localStorage.getItem('autopot-range'), 10); if ([7, 14, 30].includes(r)) rangeDays = r; } catch (e) { /* ignore */ }
+const rgba = (hex, a) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+};
+const chartGeo = {};
+function drawChart(cfg, hover) {
+  const c = $(cfg.id), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(240, c.clientWidth || 300), h = 220;
+  c.width = Math.round(w * dpr); c.height = Math.round(h * dpr);
+  const x = c.getContext('2d');
+  x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h);
+  const cs = getComputedStyle(document.documentElement);
+  const col = n => cs.getPropertyValue(n).trim();
+  const grid = col('--border'), muted = col('--muted'), green = col('--green'), line = col(cfg.color), text = col('--text');
+  const band = cfg.band(PROFILE[S.settings.phase] || PROFILE.Vegetation);
+  x.font = '11px system-ui,sans-serif';
+  const pts = sorted().map(e => ({ t: Date.parse(e.date + 'T12:00:00'), v: cfg.get(e), d: e.date })).filter(p => p.v != null && Number.isFinite(p.v) && (!rangeDays || daysAgo(p.d) <= rangeDays));
+  chartGeo[cfg.id] = [];
+  if (!pts.length) { x.fillStyle = muted; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(rangeDays ? 'Keine Daten im Zeitraum' : 'Keine Daten', w / 2, h / 2); return; }
+  let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
+  if (band) { lo = Math.min(lo, band[0]); hi = Math.max(hi, band[1]); }
+  const padv = (hi - lo) * 0.12 || 0.5; lo -= padv; hi += padv;
+  const L = 44, R = 14, T = 12, B = 26, pw = w - L - R, ph = h - T - B;
+  const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+  const px = t => t1 === t0 ? L + pw / 2 : L + (t - t0) / (t1 - t0) * pw;
+  const py = v => T + (hi - v) / (hi - lo) * ph;
+  if (band) {
+    x.fillStyle = rgba(green, 0.16); x.fillRect(L, py(band[1]), pw, py(band[0]) - py(band[1]));
+    x.strokeStyle = rgba(green, 0.45); x.lineWidth = 1; x.setLineDash([3, 3]);
+    [band[0], band[1]].forEach(b => { x.beginPath(); x.moveTo(L, py(b)); x.lineTo(w - R, py(b)); x.stroke(); });
+    x.setLineDash([]);
+  }
+  x.strokeStyle = rgba(grid, 0.8); x.lineWidth = 1; x.fillStyle = muted; x.textAlign = 'right'; x.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4, y = py(v);
+    x.beginPath(); x.moveTo(L, y); x.lineTo(w - R, y); x.stroke();
+    x.fillText(nf(v, cfg.dec), L - 6, y);
+  }
+  x.textBaseline = 'top';
+  if (t1 === t0) { x.textAlign = 'center'; x.fillText(shortDate(t0), px(t0), h - B + 8); }
+  else {
+    const nt = Math.min(4, Math.max(2, Math.floor(pw / 90)));
+    for (let i = 0; i < nt; i++) {
+      const tt = t0 + (t1 - t0) * i / (nt - 1);
+      x.textAlign = i === 0 ? 'left' : i === nt - 1 ? 'right' : 'center';
+      x.fillText(shortDate(tt), px(tt), h - B + 8);
+    }
+  }
+  const P = pts.map(p => ({ x: px(p.t), y: py(p.v) }));
+  const trace = () => {
+    x.moveTo(P[0].x, P[0].y);
+    if (P.length === 2) x.lineTo(P[1].x, P[1].y);
+    else if (P.length > 2) {
+      for (let i = 1; i < P.length - 1; i++) x.quadraticCurveTo(P[i].x, P[i].y, (P[i].x + P[i + 1].x) / 2, (P[i].y + P[i + 1].y) / 2);
+      x.lineTo(P[P.length - 1].x, P[P.length - 1].y);
+    }
+  };
+  if (P.length > 1) {
+    const gr = x.createLinearGradient(0, T, 0, T + ph);
+    gr.addColorStop(0, rgba(line, 0.32)); gr.addColorStop(1, rgba(line, 0));
+    x.beginPath(); trace(); x.lineTo(P[P.length - 1].x, T + ph); x.lineTo(P[0].x, T + ph); x.closePath();
+    x.fillStyle = gr; x.fill();
+    x.strokeStyle = line; x.lineWidth = 2.6; x.lineJoin = 'round'; x.lineCap = 'round';
+    x.beginPath(); trace(); x.stroke();
+  }
+  P.forEach(q => {
+    x.fillStyle = cs.getPropertyValue('--surface').trim() || '#fff'; x.beginPath(); x.arc(q.x, q.y, 5, 0, Math.PI * 2); x.fill();
+    x.fillStyle = line; x.beginPath(); x.arc(q.x, q.y, 3.4, 0, Math.PI * 2); x.fill();
+  });
+  chartGeo[cfg.id] = pts.map((p, i) => ({ x: P[i].x, y: P[i].y, v: p.v, d: p.d }));
+  if (hover != null && chartGeo[cfg.id][hover]) {
+    const g = chartGeo[cfg.id][hover];
+    x.strokeStyle = text; x.globalAlpha = 0.35; x.setLineDash([4, 3]);
+    x.beginPath(); x.moveTo(g.x, T); x.lineTo(g.x, T + ph); x.stroke();
+    x.setLineDash([]); x.globalAlpha = 1;
+    x.fillStyle = line; x.beginPath(); x.arc(g.x, g.y, 6.5, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = text; x.lineWidth = 2; x.stroke();
+  }
+}
+function bindChartHover() {
+  const hideAll = () => { $('tip').classList.add('hidden'); };
+  CHARTS.forEach(cfg => {
+    const c = $(cfg.id);
+    const show = ev => {
+      const geo = chartGeo[cfg.id] || [];
+      if (!geo.length) return;
+      const r = c.getBoundingClientRect(), px = ev.clientX - r.left;
+      let best = 0;
+      geo.forEach((g, i) => { if (Math.abs(g.x - px) < Math.abs(geo[best].x - px)) best = i; });
+      drawChart(cfg, best);
+      const g = geo[best], tip = $('tip');
+      tip.textContent = `${fmtDate(g.d)} · ${nf(g.v, cfg.dec)}${cfg.unit}`;
+      tip.classList.remove('hidden');
+      tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 6, Math.max(6, r.left + g.x - tip.offsetWidth / 2)) + 'px';
+      tip.style.top = Math.max(4, r.top + g.y - tip.offsetHeight - 12) + 'px';
+    };
+    c.addEventListener('pointermove', show);
+    c.addEventListener('pointerdown', show);
+    c.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') { hideAll(); drawChart(cfg); } });
+  });
+  document.addEventListener('pointerdown', ev => {
+    if (ev.target.closest && ev.target.closest('.chartbox')) return;
+    hideAll(); CHARTS.forEach(cfg => drawChart(cfg));
+  });
+  window.addEventListener('scroll', hideAll, { passive: true });
+}
+
+function renderCharts() {
+  const es = sorted();
+  CHARTS.forEach(cfg => {
+    drawChart(cfg);
+    let last = null;
+    for (let i = es.length - 1; i >= 0; i--) { const v = cfg.get(es[i]); if (v != null && Number.isFinite(v)) { last = v; break; } }
+    const cur = $(cfg.id).closest('.card').querySelector('.cur');
+    if (cur) cur.textContent = last == null ? '' : nf(last, cfg.dec) + cfg.unit;
+  });
+  const groups = {};
+  S.entries.forEach(e => { (groups[e.phase || 'Ohne Phase'] ??= []).push(e); });
+  const rank = k => PHASES.indexOf(k) < 0 ? 99 : PHASES.indexOf(k);
+  const keys = Object.keys(groups).sort((a, b) => rank(a) - rank(b));
+  $('averages').innerHTML = keys.map(k => {
+    const a = groups[k];
+    const avg = (fn, d) => { const v = a.map(fn).filter(z => z != null && Number.isFinite(z)); return v.length ? nf(v.reduce((s, z) => s + z, 0) / v.length, d) : '–'; };
+    return `<div class="card"><h3>${esc(k)} (${a.length})</h3>EC: ${avg(e => e.ec, 2)}<br>pH: ${avg(e => e.ph, 2)}<br>VPD: ${avg(vpdOf, 2)} kPa<br>Luft: ${avg(e => e.airTemp, 1)} °C · rF: ${avg(e => e.humidity, 0)} %<br>PPFD: ${avg(e => e.ppfd, 0)}</div>`;
+  }).join('') || '<p class="sub">Noch keine Daten.</p>';
+}
+
+/* ---------- Rechner ---------- */
+function renderHeatmap() {
+  const band = (PROFILE[S.settings.phase] || PROFILE.Vegetation).vpd;
+  const off = num($('hLeaf').value) || 0;
+  const temps = [20, 22, 24, 26, 28, 30, 32], rhs = [30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
+  const e = sorted().filter(x => x.airTemp != null && x.humidity != null).pop();
+  const near = (list, v) => list.reduce((b, c) => Math.abs(c - v) < Math.abs(b - v) ? c : b, list[0]);
+  const curT = e ? near(temps, e.airTemp) : null, curR = e ? near(rhs, e.humidity) : null;
+  let html = '<thead><tr><th>rF \\ °C</th>' + temps.map(t => `<th>${t}</th>`).join('') + '</tr></thead><tbody>';
+  rhs.forEach(r => {
+    html += `<tr><th>${r} %</th>` + temps.map(t => {
+      const v = Math.max(0, svp(t + off) - svp(t) * r / 100);
+      const cls = v < band[0] ? 'lo' : v <= band[1] ? 'ok' : v <= band[1] + 0.4 ? 'hi' : 'xh';
+      return `<td class="${cls}${t === curT && r === curR ? ' now' : ''}" title="${t} °C, ${r} % rF: ${nf(v)} kPa">${nf(v, 1)}</td>`;
+    }).join('') + '</tr>';
+  });
+  $('vpdMap').innerHTML = html + '</tbody>';
+  $('heatNote').textContent = `Ziel ${rng(band, ' kPa')} (${S.settings.phase})${e ? ' · Rahmen = letzter Eintrag' : ''}`;
+}
+function renderCalc() {
+  const v = calcVpd(num($('vTemp').value), num($('vRh').value));
+  const [lbl, cls] = rangeChip(v, (PROFILE[S.settings.phase] || PROFILE.Vegetation).vpd);
+  $('vOut').innerHTML = v == null ? '–' : `<strong>${nf(v)} kPa</strong> <span class="chip ${cls}">${lbl}</span> <span class="sub">(Phase ${esc(S.settings.phase)})</span>`;
+  const base = num($('eBase').value) ?? 0, target = num($('eTarget').value) ?? 0, L = num($('eLiter').value) ?? 0, d = target - base;
+  $('eOut').innerHTML = d < 0 ? 'Ziel-EC liegt unter dem Ausgangs-EC: mit Wasser verdünnen.' : `EC-Erhöhung <strong>${nf(d)}</strong> · Modellmenge ca. <strong>${Math.round(d * 2 * L)} ml</strong>`;
+  const cur = num($('pCur').value), tar = num($('pTar').value);
+  if (cur == null || tar == null) $('pOut').textContent = '–';
+  else {
+    const dif = Math.abs(cur - tar);
+    $('pOut').innerHTML = dif < 0.05 ? 'Kein Korrekturbedarf.' : `Differenz <strong>${nf(dif, 1)}</strong> – pH ${cur > tar ? 'senken (pH-Down)' : 'anheben (pH-Up)'} in 0,1er-Schritten, nach jeder Zugabe messen.`;
+  }
+  const ol = num($('wOldL').value) ?? 0, oe = num($('wOldEc').value) ?? 0, nl = num($('wNewL').value) ?? 0, ne = num($('wNewEc').value) ?? 0;
+  $('wOut').innerHTML = ol + nl > 0 ? `Misch-EC: <strong>${nf((ol * oe + nl * ne) / (ol + nl))}</strong> bei ${nf(ol + nl, 1)} L` : '–';
+  const rest = S.settings.tankRest, use = S.settings.dailyUse;
+  if (use > 0) {
+    const days = Math.floor(rest / use), dt = new Date(); dt.setDate(dt.getDate() + days);
+    $('tOut').innerHTML = `Restlaufzeit: <strong>${days} Tage</strong><br>Nachfüllen spätestens: <strong>${dt.toLocaleDateString('de-DE')}</strong><br>Füllstand: ${nf(rest, 1)} von ${nf(S.settings.tankSize, 1)} L`;
+  } else $('tOut').textContent = 'Verbrauch pro Tag eintragen.';
+  const pf = num($('dPpfd').value), hrs = num($('dHours').value);
+  if (pf == null || hrs == null || hrs <= 0 || hrs > 24) $('dOut').textContent = '–';
+  else {
+    const dli = pf * 3600 * hrs / 1e6, pr = (PROFILE[S.settings.phase] || PROFILE.Vegetation).ppfd;
+    const tr = pr ? [pr[0] * hrs * 0.0036, pr[1] * hrs * 0.0036] : null;
+    const [l2, c2] = rangeChip(dli, tr);
+    $('dOut').innerHTML = `<strong>${nf(dli, 1)} mol/m²/Tag</strong>${tr ? ` <span class="chip ${c2}">${l2}</span><br><span class="sub">Zielbereich der Phase bei ${nf(hrs, 1)} h: ${nf(tr[0], 1)}–${nf(tr[1], 1)}</span>` : '<br><span class="sub">Für die Endphase gibt es keine feste Vorgabe.</span>'}`;
+  }
+  renderHeatmap();
+}
+
+/* ---------- Ernte & Archiv ---------- */
+function renderHarvest() {
+  const h = S.harvest, gi = growInfo();
+  const cards = [];
+  if (h.dry != null) cards.push(['Trockengewicht', nf(h.dry, 1) + ' g']);
+  if (h.wet != null && h.dry != null && h.wet > 0) cards.push(['Trocknungsverlust', nf((1 - h.dry / h.wet) * 100, 0) + ' %']);
+  if (h.dry != null && h.watt) cards.push(['Ertrag pro Watt', nf(h.dry / h.watt, 2) + ' g/W']);
+  if (h.date && gi) cards.push(['Dauer bis Ernte', Math.max(1, dayDiff(gi.start, h.date) + 1) + ' Tage']);
+  if (h.date && gi && h.dry != null) cards.push(['Ertrag pro Tag', nf(h.dry / Math.max(1, dayDiff(gi.start, h.date) + 1), 2) + ' g']);
+  $('hOut').innerHTML = cards.map(([t, v]) => `<div class="card"><h3>${esc(t)}</h3><div class="value">${esc(v)}</div></div>`).join('') || '<p class="sub">Trage Erntedatum und Gewichte ein – dann werden Ertrag, Trocknungsverlust und g/W berechnet.</p>';
+}
+function renderArchive() {
+  $('archiveList').innerHTML = S.archive.map(a => `<div class="item"><div><strong>${esc(a.name || 'Grow')}</strong> <span class="meta">${esc(a.start ? fmtDate(a.start) : '–')} → ${esc(a.end ? fmtDate(a.end) : '–')}${a.days ? ` · ${a.days} Tage` : ''}</span><p>${a.entries} Einträge${a.dry != null ? ` · ${nf(a.dry, 1)} g trocken` : ''}${a.dry != null && a.watt ? ` (${nf(a.dry / a.watt, 2)} g/W)` : ''}${a.avgEc != null ? ` · Ø EC ${nf(a.avgEc)}` : ''}${a.avgPh != null ? ` · Ø pH ${nf(a.avgPh)}` : ''}</p></div><button class="btn small danger" data-act="del-archive" data-id="${esc(a.id)}" type="button" aria-label="Archiv-Eintrag löschen">✕</button></div>`).join('') || '<p class="sub">Noch keine abgeschlossenen Grows.</p>';
+}
+
+function renderLists() {
+  $('recipeList').innerHTML = S.recipes.map(r => `<div class="item"><div><strong>${esc(r.name)}</strong> <span class="meta">${esc(r.phase)}</span><p>${esc(r.text)}</p></div><button class="btn small danger" data-act="del-recipe" data-id="${esc(r.id)}" type="button" aria-label="Rezept löschen">✕</button></div>`).join('') || '<p class="sub">Noch keine Rezepte.</p>';
+  const ev = S.events.slice().sort((a, b) => a.date.localeCompare(b.date));
+  $('eventList').innerHTML = ev.map(e => `<div class="item"><div><strong>${esc(fmtDate(e.date))} · ${esc(e.title)}</strong><p>${esc(e.note)}</p></div><button class="btn small danger" data-act="del-event" data-id="${esc(e.id)}" type="button" aria-label="Ereignis löschen">✕</button></div>`).join('') || '<p class="sub">Noch keine Meilensteine.</p>';
+}
+
+
+/* ---------- Erinnerungen ---------- */
+const STEP = { daily: 1, weekly: 7 };
+const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+function remInfo(r, now = new Date()) {
+  const base = new Date(`${r.date}T${r.time || '09:00'}`);
+  if (isNaN(base)) return { due: null, label: 'Ungültig', cls: 'bad', done: false };
+  const step = STEP[r.repeat];
+  let occ = base;
+  if (step && base <= now) {
+    const k = Math.floor((now - base) / 864e5 / step);
+    occ = addDays(base, k * step);
+    while (occ > now) occ = addDays(occ, -step);
+    while (addDays(occ, step) <= now) occ = addDays(occ, step);
+  }
+  const done = r.lastDone ? new Date(r.lastDone) : null;
+  if (done && done >= occ) return { due: step ? addDays(occ, step) : occ, label: 'Erledigt', cls: 'ok', done: true, occ };
+  if (occ <= now) return { due: occ, label: (now - occ) < 432e5 ? 'Fällig' : 'Überfällig', cls: (now - occ) < 432e5 ? 'warn' : 'bad', done: false, occ };
+  return { due: occ, label: (occ - now) < 864e5 ? 'Bald fällig' : 'Geplant', cls: (occ - now) < 864e5 ? 'warn' : 'mute', done: false, occ };
+}
+const REPEAT = { once: 'Einmalig', daily: 'Täglich', weekly: 'Wöchentlich' };
+function renderReminders() {
+  $('remBody').innerHTML = S.reminders.map(r => {
+    const i = remInfo(r);
+    return `<tr><td>${esc(r.title)}</td><td class="num">${i.due ? esc(i.due.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })) : '–'}</td><td>${REPEAT[r.repeat]}</td><td><span class="chip ${i.cls}">${i.label}</span></td><td class="num"><button class="btn small" data-act="rem-done" data-id="${esc(r.id)}" type="button">${i.done ? 'Zurücksetzen' : 'Erledigt'}</button> <button class="btn small danger" data-act="del-rem" data-id="${esc(r.id)}" type="button" aria-label="Erinnerung löschen">✕</button></td></tr>`;
+  }).join('') || '<tr><td colspan="5">Keine Erinnerungen.</td></tr>';
+  $('notifyState').textContent = 'Notification' in window ? `Benachrichtigungen: ${({ granted: 'erlaubt', denied: 'blockiert', default: 'noch nicht erlaubt' })[Notification.permission]}` : 'Dieser Browser unterstützt keine Benachrichtigungen.';
+}
+function tick() {
+  let changed = false;
+  S.reminders.forEach(r => {
+    const i = remInfo(r);
+    if (!i.done && i.occ && i.occ <= new Date() && r.notified !== i.occ.toISOString()) {
+      if ('Notification' in window && Notification.permission === 'granted') { try { new Notification('Grow-Erinnerung', { body: r.title }); } catch (e) { /* ignore */ } }
+      r.notified = i.occ.toISOString(); changed = true;
+    }
+  });
+  if (changed) save();
+  renderReminders();
+}
+
+/* Kalenderexport (iCalendar, RFC 5545): Erinnerungen laufen so auch bei geschlossenem Browser */
+const icsEscape = s => String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+function icsFold(line) {
+  const enc = new TextEncoder();
+  if (enc.encode(line).length <= 75) return line;
+  let out = '', cur = '', n = 0, first = true;
+  for (const ch of line) {
+    const b = enc.encode(ch).length;
+    if (n + b > (first ? 75 : 74)) { out += cur + '\r\n '; cur = ''; n = 0; first = false; }
+    cur += ch; n += b;
+  }
+  return out + cur;
+}
+function exportIcs() {
+  if (!S.reminders.length) { toast('Keine Erinnerungen vorhanden.', true); return; }
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//AutoPot Grow-App//DE', 'CALSCALE:GREGORIAN'];
+  S.reminders.forEach(r => {
+    const start = r.date.replace(/-/g, '') + 'T' + r.time.replace(':', '') + '00';
+    lines.push('BEGIN:VEVENT', `UID:${r.id.replace(/[^A-Za-z0-9-]/g, '')}@autopot-grow-app`, `DTSTAMP:${stamp}`, `DTSTART:${start}`, 'DURATION:PT15M', `SUMMARY:${icsEscape(r.title)}`);
+    if (r.repeat === 'daily') lines.push('RRULE:FREQ=DAILY');
+    if (r.repeat === 'weekly') lines.push('RRULE:FREQ=WEEKLY');
+    lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEscape(r.title)}`, 'TRIGGER:PT0S', 'END:VALARM', 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  download('autopot-erinnerungen.ics', lines.map(icsFold).join('\r\n') + '\r\n', 'text/calendar;charset=utf-8');
+  toast('Kalenderdatei exportiert. Zum Importieren in den Kalender öffnen.');
+}
+
+/* ---------- Diagnose & Checklisten ---------- */
+function renderSymptoms() {
+  $('symptoms').innerHTML = SYMPTOMS.map(([id, t]) => `<label class="check"><input type="checkbox" value="${id}"><span>${esc(t)}</span></label>`).join('');
+}
+function diagnose() {
+  const sel = [...document.querySelectorAll('#symptoms input:checked')].map(x => x.value);
+  if (!sel.length) { $('diagOut').innerHTML = '<div class="notice">Mindestens ein Symptom auswählen.</div>'; return; }
+  const res = CAUSES.map(c => ({ c, n: c.s.filter(s => sel.includes(s)).length })).filter(r => r.n > 0).sort((a, b) => b.n - a.n);
+  const e = sorted().pop();
+  let extra = '';
+  if (e) {
+    const hints = [];
+    if (e.ph != null && (e.ph < PH_RANGE[0] || e.ph > PH_RANGE[1])) hints.push(`Letzter Tank-pH ${nf(e.ph)} liegt außerhalb ${rng(PH_RANGE)}.`);
+    const p = PROFILE[e.phase] || PROFILE[S.settings.phase];
+    if (e.ec != null && p && (e.ec < p.ec[0] || e.ec > p.ec[1])) hints.push(`Letzter Tank-EC ${nf(e.ec)} liegt außerhalb ${rng(p.ec)}.`);
+    if (hints.length) extra = `<div class="notice warn"><span><strong>Aus deinem Protokoll:</strong> ${hints.map(esc).join(' ')}</span></div>`;
+  }
+  $('diagOut').innerHTML = extra + res.map(r => `<div class="item"><div><strong>${esc(r.c.t)}</strong> <span class="chip mute">${r.n} Treffer</span><p>${esc(r.c.a)}</p></div></div>`).join('');
+}
+function renderChecks() {
+  const mk = (items, state, key) => items.map((t, i) => `<label class="check"><input type="checkbox" data-check="${key}" data-i="${i}" ${state[i] ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('');
+  $('setupList').innerHTML = mk(SETUP_CHECKS, S.checks.setup, 'setup');
+  $('weekList').innerHTML = mk(WEEK_CHECKS, S.checks.week, 'week');
+}
+
+function renderAll() {
+  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks();
+}
+
+/* ---------- Formular ---------- */
+const FORM_IDS = ['fEc', 'fPh', 'fWater', 'fAir', 'fRh', 'fPpfd', 'fUse', 'fHeight', 'fTags', 'fNote'];
+function setPhoto(data, dirty) {
+  pendingPhoto = data || ''; photoDirty = !!dirty;
+  const img = $('photoPreview');
+  if (pendingPhoto) { img.src = pendingPhoto; img.classList.remove('hidden'); $('photoRemove').classList.remove('hidden'); }
+  else { img.removeAttribute('src'); img.classList.add('hidden'); $('photoRemove').classList.add('hidden'); }
+  $('fPhoto').value = '';
+}
+function resetForm(keepDate) {
+  FORM_IDS.forEach(id => { $(id).value = ''; });
+  if (!keepDate) $('fDate').value = todayStr();
+  $('fPhase').value = S.settings.phase;
+  setPhoto('', false);
+  editingId = null;
+  $('formTitle').textContent = 'Neuer Eintrag';
+  $('saveEntry').textContent = 'Eintrag speichern';
+  $('cancelEdit').classList.add('hidden');
+}
+function startEdit(id) {
+  const e = S.entries.find(x => x.id === id);
+  if (!e) return;
+  editingId = id;
+  $('fDate').value = e.date;
+  $('fPhase').value = PHASES.includes(e.phase) ? e.phase : S.settings.phase;
+  const set = (el, v) => { $(el).value = v ?? ''; };
+  set('fEc', e.ec); set('fPh', e.ph); set('fWater', e.waterTemp); set('fAir', e.airTemp); set('fRh', e.humidity); set('fPpfd', e.ppfd); set('fUse', e.use); set('fHeight', e.height); set('fTags', e.tags); set('fNote', e.note);
+  setPhoto(photoCache.get(id) || '', false);
+  $('formTitle').textContent = 'Eintrag bearbeiten';
+  $('saveEntry').textContent = 'Änderung speichern';
+  $('cancelEdit').classList.remove('hidden');
+  $('formTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+async function saveEntry() {
+  const date = $('fDate').value;
+  if (!date) { toast('Bitte ein Datum angeben.', true); return; }
+  const raw = { ec: $('fEc').value, ph: $('fPh').value, waterTemp: $('fWater').value, airTemp: $('fAir').value, humidity: $('fRh').value, ppfd: $('fPpfd').value, use: $('fUse').value, height: $('fHeight').value };
+  const e = normEntry(Object.assign({ id: editingId || uid(), date, phase: $('fPhase').value, tags: $('fTags').value.trim(), note: $('fNote').value.trim() }, raw));
+  if (!e) { toast('Ungültiges Datum.', true); return; }
+  if (e.ph != null && (e.ph < 0 || e.ph > 14)) { toast('pH muss zwischen 0 und 14 liegen.', true); return; }
+  if (e.humidity != null && (e.humidity < 0 || e.humidity > 100)) { toast('Luftfeuchte muss zwischen 0 und 100 % liegen.', true); return; }
+  if ([e.ec, e.ph, e.waterTemp, e.airTemp, e.humidity, e.ppfd, e.use, e.height].every(v => v == null) && !e.note && !pendingPhoto) { toast('Bitte mindestens einen Messwert, eine Notiz oder ein Foto eintragen.', true); return; }
+  const prior = S.entries.find(x => x.id === e.id);
+  let hasPhoto = photoCache.has(e.id) || !!(prior && prior.hasPhoto);
+  if (photoDirty) {
+    try {
+      if (pendingPhoto) { await idbRun('readwrite', s => s.put(pendingPhoto, e.id)); photoCache.set(e.id, pendingPhoto); hasPhoto = true; }
+      else { if (idb) await idbRun('readwrite', s => s.delete(e.id)); photoCache.delete(e.id); hasPhoto = false; }
+    } catch (err) { toast('Das Foto konnte nicht gespeichert werden (Speicher voll?). Der Eintrag wird ohne die Foto-Änderung gespeichert.', true); }
+  }
+  e.hasPhoto = hasPhoto;
+  const before = JSON.stringify(S);
+  const wasEdit = !!editingId;
+  if (wasEdit) { const i = S.entries.findIndex(x => x.id === editingId); if (i >= 0) S.entries[i] = e; else S.entries.push(e); }
+  else { S.entries.push(e); S.settings.entriesSinceBackup = (S.settings.entriesSinceBackup || 0) + 1; }
+  if (!save()) { S = JSON.parse(before); return; }
+  resetForm(true);
+  renderAll();
+  toast(wasEdit ? 'Änderung gespeichert.' : 'Eintrag gespeichert.');
+}
+function resizeImage(file, max = 800, q = 0.72) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Bild nicht lesbar')); };
+    img.src = url;
+  });
+}
+
+/* ---------- Export / Import ---------- */
+function download(name, text, type) {
+  const a = document.createElement('a'), url = URL.createObjectURL(new Blob([text], { type }));
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const CSV_HEAD = ['Datum', 'Phase', 'EC', 'pH', 'Wassertemperatur', 'Lufttemperatur', 'Luftfeuchte', 'VPD', 'PPFD', 'Verbrauch', 'Notiz', 'Tags', 'Höhe'];
+function csvCell(v) {
+  let s = String(v ?? '');
+  if (/^[=+@\t\r]/.test(s) || /^-[^\d.,]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+function exportCsv() {
+  const n = (v, d) => v == null ? '' : String(Number(v.toFixed(d))).replace('.', ',');
+  const rows = sorted().map(e => [e.date, e.phase, n(e.ec, 2), n(e.ph, 2), n(e.waterTemp, 1), n(e.airTemp, 1), n(e.humidity, 0), n(vpdOf(e), 2), n(e.ppfd, 0), n(e.use, 1), e.note, e.tags, n(e.height, 1)]);
+  download('autopot-grow-log.csv', '\ufeff' + [CSV_HEAD, ...rows].map(r => r.map(csvCell).join(';')).join('\r\n') + '\r\n', 'text/csv;charset=utf-8');
+  toast('CSV exportiert.');
+}
+function exportJson() {
+  S.settings.lastBackup = new Date().toISOString();
+  S.settings.entriesSinceBackup = 0;
+  save();
+  const data = Object.assign({ exportedAt: S.settings.lastBackup }, S, { entries: S.entries.map(e => Object.assign({}, e, { photo: photoCache.get(e.id) || '' })) });
+  download('autopot-grow-backup.json', JSON.stringify(data, null, 2), 'application/json');
+  renderDashboard();
+  toast('Backup exportiert (inklusive Fotos).');
+}
+function parseCsv(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const first = text.split(/\r?\n/, 1)[0];
+  const delim = first.split(';').length >= first.split(',').length ? ';' : ',';
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(c => c !== '')) rows.push(row); row = []; }
+    else cur += ch;
+  }
+  row.push(cur); if (row.some(c => c !== '')) rows.push(row);
+  return rows;
+}
+const CSV_MAP = { datum: 'date', phase: 'phase', ec: 'ec', ph: 'ph', wassertemperatur: 'waterTemp', lufttemperatur: 'airTemp', luftfeuchte: 'humidity', ppfd: 'ppfd', verbrauch: 'use', notiz: 'note', tags: 'tags', höhe: 'height', hoehe: 'height' };
+function csvToEntries(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return [];
+  const cols = rows[0].map(h => CSV_MAP[h.toLowerCase().replace(/[^a-zäöü]/g, '')] || null);
+  return rows.slice(1).map(r => {
+    const o = {};
+    cols.forEach((k, i) => { if (k) o[k] = String(r[i] ?? '').replace(/^'(?=[=+@\-])/, ''); });
+    const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(o.date || '');
+    if (m) o.date = `${m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+    return normEntry(o);
+  }).filter(Boolean);
+}
+function importFile(file) {
+  const r = new FileReader();
+  r.onerror = () => toast('Datei konnte nicht gelesen werden.', true);
+  r.onload = async () => {
+    const text = String(r.result);
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
+      const list = csvToEntries(text);
+      if (!list.length) { toast('Keine gültigen Zeilen in der CSV gefunden.', true); return; }
+      const added = mergeEntries(S.entries, list);
+      S.settings.entriesSinceBackup = (S.settings.entriesSinceBackup || 0) + added;
+      if (save()) { renderAll(); toast(`${added} Einträge importiert (${list.length - added} Duplikate übersprungen).`); }
+      return;
+    }
+    let data;
+    try { data = JSON.parse(text); } catch (e) { toast('Ungültige JSON-Datei.', true); return; }
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !(Array.isArray(data.entries) || data.settings)) { toast('Die Datei ist kein Grow-Backup.', true); return; }
+    const n = normalize(data);
+    if (!confirm(`Backup mit ${n.entries.length} Einträgen laden?\nDie aktuellen Daten (${S.entries.length} Einträge) werden ersetzt. Über „Letzten Import rückgängig machen“ kannst du den alten Stand zurückholen.`)) return;
+    try { localStorage.setItem(KEY + '-prev', ser(S)); } catch (e) { /* ignore */ }
+    S = n;
+    await adoptPhotos(S.entries);
+    if (save()) { loadSettings(); resetForm(); renderAll(); toast('Backup geladen.'); }
+  };
+  r.readAsText(file);
+}
+async function restorePrev() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY + '-prev'); } catch (e) { /* ignore */ }
+  if (!raw) return;
+  if (!confirm('Den Stand vor dem letzten Import wiederherstellen? Der aktuelle Stand wird dabei ersetzt (und bleibt seinerseits als „vorheriger Stand“ erhalten).')) return;
+  let prev;
+  try { prev = normalize(JSON.parse(raw)); } catch (e) { toast('Der gesicherte Stand ist nicht lesbar.', true); return; }
+  try { localStorage.setItem(KEY + '-prev', ser(S)); } catch (e) { /* ignore */ }
+  S = prev;
+  await adoptPhotos(S.entries);
+  if (save()) { loadSettings(); resetForm(); renderAll(); toast('Vorheriger Stand wiederhergestellt.'); }
+}
+
+/* ---------- Einstellungen / Theme ---------- */
+function loadSettings() {
+  const s = S.settings;
+  $('sName').value = s.name; $('sPhase').value = s.phase; $('sStart').value = s.startDate || '';
+  $('sTankSize').value = s.tankSize; $('sTankRest').value = s.tankRest; $('sDailyUse').value = s.dailyUse; $('sInterval').value = s.tankInterval;
+  const h = S.harvest;
+  $('hDate').value = h.date || ''; $('hWet').value = h.wet ?? ''; $('hDry').value = h.dry ?? ''; $('hWatt').value = h.watt ?? ''; $('hNote').value = h.note || '';
+}
+function onSettings() {
+  const s = S.settings, old = s.phase;
+  s.name = $('sName').value.slice(0, 60); s.phase = $('sPhase').value;
+  s.startDate = /^\d{4}-\d{2}-\d{2}$/.test($('sStart').value) ? $('sStart').value : null;
+  s.tankSize = num($('sTankSize').value) ?? s.tankSize; s.tankRest = num($('sTankRest').value) ?? s.tankRest; s.dailyUse = num($('sDailyUse').value) ?? s.dailyUse;
+  const iv = num($('sInterval').value); if (iv != null && iv >= 1) s.tankInterval = Math.round(iv);
+  if (old !== s.phase) {
+    s.phaseStart = todayStr();
+    S.events.push({ id: uid(), date: todayStr(), title: 'Phase: ' + s.phase, note: '' });
+    renderLists();
+  }
+  save();
+  if (!editingId) $('fPhase').value = s.phase;
+  renderDashboard(); renderCharts(); renderCalc(); renderHarvest();
+}
+function onHarvest() {
+  S.harvest = { date: /^\d{4}-\d{2}-\d{2}$/.test($('hDate').value) ? $('hDate').value : '', wet: num($('hWet').value), dry: num($('hDry').value), watt: num($('hWatt').value), note: $('hNote').value.slice(0, 300) };
+  save(); renderHarvest();
+}
+function tankChange() {
+  const s = S.settings;
+  s.lastTankChange = todayStr(); s.tankRest = s.tankSize;
+  S.events.push({ id: uid(), date: todayStr(), title: 'Tank gewechselt', note: `${nf(s.tankSize, 1)} L frisch angesetzt` });
+  save(); loadSettings(); renderAll();
+  toast('Tankwechsel notiert, Tank wieder voll.');
+}
+function newGrow() {
+  if (!S.entries.length && !S.settings.startDate) { toast('Es gibt noch nichts abzuschließen.', true); return; }
+  if (!confirm('Grow abschließen und neu starten?\n\nZuerst wird ein Backup heruntergeladen. Der Grow landet im Archiv, Protokoll, Timeline und Ernte werden geleert (Rezepte und Erinnerungen bleiben). Über „Letzten Import rückgängig machen“ kannst du den Stand zurückholen.')) return;
+  exportJson();
+  const es = sorted(), h = S.harvest;
+  const avg = fn => { const v = es.map(fn).filter(z => z != null && Number.isFinite(z)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const start = S.settings.startDate || (es[0] && es[0].date) || null;
+  const end = h.date || (es.length ? es[es.length - 1].date : todayStr());
+  const item = { id: uid(), name: S.settings.name || 'Grow', start, end, entries: es.length, days: start ? Math.max(1, dayDiff(start, end) + 1) : null, wet: h.wet, dry: h.dry, watt: h.watt, avgEc: avg(e => e.ec), avgPh: avg(e => e.ph) };
+  const keep = new Set();
+  try {
+    localStorage.setItem(KEY + '-prev', ser(S));
+    (JSON.parse(localStorage.getItem(KEY + '-prev')).entries || []).forEach(e => { if (e.hasPhoto) keep.add(e.id); });
+  } catch (e) { /* ignore */ }
+  S.archive.unshift(item);
+  S.entries = []; S.events = []; S.harvest = blank().harvest; S.checks.week = {};
+  Object.assign(S.settings, { startDate: null, phaseStart: null, lastTankChange: null, phase: PHASES[0], tankRest: S.settings.tankSize });
+  [...photoCache.keys()].forEach(id => { if (!keep.has(id)) dropPhoto(id); });
+  save(); loadSettings(); resetForm(); renderAll();
+  toast('Grow archiviert. Neues Protokoll gestartet.');
+  $('dashboard').scrollIntoView({ behavior: 'smooth' });
+}
+const THEMES = { system: '🌗 System', light: '☀️ Hell', dark: '🌙 Dunkel' };
+const readTheme = () => { try { const t = localStorage.getItem('autopot-theme'); return t === 'light' || t === 'dark' ? t : 'system'; } catch (e) { return 'system'; } };
+function applyTheme(p) {
+  const root = document.documentElement;
+  if (p === 'system') delete root.dataset.theme; else root.dataset.theme = p;
+  $('themeToggle').textContent = THEMES[p];
+  const dark = p === 'dark' || (p === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#09100c' : '#eef4ef');
+}
+
+/* ---------- Dialoge, Lightbox, Navigation ---------- */
+const openDlg = id => { const d = $(id); if (!d.open) { if (d.showModal) d.showModal(); else d.setAttribute('open', ''); } };
+const closeDlg = id => { const d = $(id); if (d.open) { if (d.close) d.close(); else d.removeAttribute('open'); } };
+const lb = { list: [], i: 0 };
+function showLb() {
+  const id = lb.list[lb.i], e = S.entries.find(x => x.id === id);
+  if (!e || !photoCache.has(id)) return;
+  $('lbImg').src = photoCache.get(id);
+  $('lbCap').textContent = `${fmtDate(e.date)} · ${e.phase || '–'}${e.height != null ? ' · ' + nf(e.height, 1) + ' cm' : ''}  (${lb.i + 1}/${lb.list.length})`;
+  $('lbNote').textContent = e.note || '';
+  $('lbPrev').disabled = lb.i <= 0; $('lbNext').disabled = lb.i >= lb.list.length - 1;
+}
+function openLightbox(id) {
+  lb.list = sorted().filter(e => photoCache.has(e.id)).map(e => e.id);
+  lb.i = Math.max(0, lb.list.indexOf(id));
+  showLb(); openDlg('lightbox');
+}
+const SECTIONS = ['dashboard', 'log', 'charts', 'gallery', 'calc', 'harvest', 'recipes', 'timeline', 'reminders', 'diagnose', 'checks'];
+let navRaf = 0;
+function updateNav() {
+  navRaf = 0;
+  let cur = SECTIONS[0];
+  SECTIONS.forEach(id => { if ($(id).getBoundingClientRect().top <= 150) cur = id; });
+  document.querySelectorAll('nav.tabs a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur));
+  const main4 = ['dashboard', 'log', 'charts', 'calc'];
+  document.querySelectorAll('.bottomnav [data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === cur));
+  $('moreBtn').classList.toggle('on', !main4.includes(cur));
+}
+const QUICK_TAGS = ['pH korrigiert', 'Tank gewechselt', 'Gedüngt', 'Entlaubt', 'LST / Training', 'Umgetopft', 'Schädlinge', 'Mangel', 'Filter gereinigt'];
+
+/* ---------- Cloud-Konto & Synchronisation ---------- */
+const CLOUD = { available: false, user: null, status: 'off', last: null, busy: false, again: false, dirty: false, applying: false, timer: null };
+const SYNC_KEY = 'autopot-sync';
+const readSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
+const writeSync = o => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(o)); } catch (e) { /* ignore */ } };
+const PHOTO_ID_OK = id => /^[A-Za-z0-9_-]{1,40}$/.test(id);
+
+async function cloudApi(method, url, body) {
+  let res;
+  try {
+    res = await fetch(url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch (e) { return { ok: false, status: 0, data: null }; }
+  let data = null; try { data = await res.json(); } catch (e) { /* kein JSON */ }
+  if (res.status === 401 && CLOUD.user && !/\/api\/(login|recover|password|account)$/.test(url)) {
+    CLOUD.user = null; setSyncStatus('expired'); toast('Sitzung abgelaufen. Bitte im Konto-Dialog neu anmelden.', true); renderAccount();
+  }
+  return { ok: res.ok, status: res.status, data };
+}
+const STATUS_TEXT = { off: 'Nicht angemeldet – Daten nur auf diesem Gerät', ok: 'Synchronisiert', syncing: 'Synchronisiere …', offline: 'Offline – Änderungen werden später übertragen', error: 'Synchronisierung fehlgeschlagen', expired: 'Sitzung abgelaufen – bitte neu anmelden' };
+function setSyncStatus(s) {
+  CLOUD.status = s;
+  const dot = $('syncDot');
+  if (dot) { dot.className = 'sync-dot ' + s; dot.title = STATUS_TEXT[s] || ''; }
+  const t = $('syncText');
+  if (t) t.textContent = (STATUS_TEXT[s] || '') + (s === 'ok' && CLOUD.last ? ` (${CLOUD.last.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr)` : '');
+}
+
+/* Zwei Stände zusammenführen: Einträge, Rezepte, Ereignisse usw. werden vereinigt, bei Konflikten gewinnt der bevorzugte Stand */
+function mergeStates(preferred, other) {
+  const out = normalize(JSON.parse(ser(preferred)));
+  const o = normalize(JSON.parse(ser(other)));
+  const ids = new Set(out.entries.map(e => e.id)), keys = new Set(out.entries.map(entryKey));
+  o.entries.forEach(e => { if (!ids.has(e.id) && !keys.has(entryKey(e))) { out.entries.push(e); ids.add(e.id); keys.add(entryKey(e)); } });
+  ['recipes', 'events', 'reminders', 'archive'].forEach(k => {
+    const have = new Set(out[k].map(x => x.id));
+    o[k].forEach(x => { if (!have.has(x.id)) out[k].push(x); });
+  });
+  ['setup', 'week'].forEach(k => Object.keys(o.checks[k]).forEach(i => { out.checks[k][i] = true; }));
+  return out;
+}
+const hasLocalData = () => S.entries.length || S.recipes.length || S.events.length || S.settings.name || S.archive.length;
+function applyState(next) {
+  CLOUD.applying = true;
+  try { S = next; save(); } finally { CLOUD.applying = false; }
+  loadSettings(); if (!editingId) resetForm(true); renderAll();
+}
+
+async function cloudPull(initial) {
+  const r = await cloudApi('GET', '/api/state');
+  if (r.status === 0) { setSyncStatus('offline'); return false; }
+  if (!r.ok) { setSyncStatus('error'); return false; }
+  const meta = readSync();
+  if (r.data.data == null) { writeSync(Object.assign(meta, { version: 0 })); return true; }  /* Server leer: lokal hochladen */
+  const remote = normalize(r.data.data);
+  if (r.data.version === meta.version && !initial) return true;
+  if (initial && meta.version === r.data.version && !CLOUD.dirty) return true;
+  let next;
+  if (!hasLocalData() && !CLOUD.dirty) next = remote;
+  else if (initial && !meta.version) { next = mergeStates(S, remote); toast('Lokale Daten und Cloud-Daten wurden zusammengeführt.'); CLOUD.dirty = true; }
+  else if (CLOUD.dirty) next = mergeStates(S, remote);
+  else next = remote;
+  applyState(next);
+  writeSync(Object.assign(readSync(), { version: r.data.version }));
+  pullPhotos();
+  return true;
+}
+async function cloudPush(retry) {
+  const meta = readSync();
+  const r = await cloudApi('PUT', '/api/state', { baseVersion: meta.version || 0, data: JSON.parse(ser(S)) });
+  if (r.status === 0) { setSyncStatus('offline'); return false; }
+  if (r.status === 409 && !retry) { CLOUD.dirty = true; if (!(await cloudPull(true))) return false; writeSync(Object.assign(readSync(), { version: r.data.version })); return cloudPush(true); }
+  if (!r.ok) { setSyncStatus(r.status === 401 ? 'expired' : 'error'); return false; }
+  writeSync(Object.assign(readSync(), { version: r.data.version, dirty: false }));
+  CLOUD.dirty = false;
+  return true;
+}
+async function pushPhotos() {
+  const meta = readSync(), up = new Set(meta.photos || []);
+  const want = new Set(S.entries.filter(e => e.hasPhoto && PHOTO_ID_OK(e.id)).map(e => e.id));
+  for (const id of want) {
+    if (up.has(id) || !photoCache.has(id)) continue;
+    const r = await cloudApi('PUT', '/api/photos/' + id, { data: photoCache.get(id) });
+    if (r.status === 0) { setSyncStatus('offline'); return false; }
+    if (r.ok) up.add(id);
+  }
+  for (const id of [...up]) {
+    if (want.has(id)) continue;
+    const r = await cloudApi('DELETE', '/api/photos/' + id);
+    if (r.status === 0) { setSyncStatus('offline'); return false; }
+    if (r.ok) up.delete(id);
+  }
+  writeSync(Object.assign(readSync(), { photos: [...up] }));
+  return true;
+}
+async function pullPhotos() {
+  const list = await cloudApi('GET', '/api/photos');
+  if (!list.ok) return;
+  const have = new Set(list.data.ids), meta = readSync(), up = new Set(meta.photos || []);
+  let got = 0;
+  for (const e of S.entries) {
+    if (!e.hasPhoto || photoCache.has(e.id) || !have.has(e.id)) continue;
+    const r = await cloudApi('GET', '/api/photos/' + e.id);
+    if (r.ok && typeof r.data.data === 'string' && IMG_RE.test(r.data.data)) {
+      photoCache.set(e.id, r.data.data); up.add(e.id); got++;
+      if (idb) { try { await idbRun('readwrite', s => s.put(r.data.data, e.id)); } catch (err) { /* nur im Speicher */ } }
+    }
+  }
+  if (got) { writeSync(Object.assign(readSync(), { photos: [...up] })); renderLog(); renderGallery(); }
+}
+async function cloudSync() {
+  if (!CLOUD.user) return;
+  if (CLOUD.busy) { CLOUD.again = true; return; }
+  CLOUD.busy = true; setSyncStatus('syncing');
+  try {
+    let ok = true;
+    if (CLOUD.dirty || !readSync().version) ok = await cloudPush(false);
+    else ok = await cloudPull(false);
+    if (ok) ok = await pushPhotos();
+    if (ok) { CLOUD.last = new Date(); writeSync(Object.assign(readSync(), { lastSync: CLOUD.last.toISOString() })); setSyncStatus('ok'); }
+  } catch (e) { console.error(e); setSyncStatus('error'); }
+  CLOUD.busy = false;
+  if (CLOUD.again) { CLOUD.again = false; scheduleSync(300); }
+  renderAccount();
+}
+function scheduleSync(delay = 1500) {
+  if (!CLOUD.user || CLOUD.applying) return;
+  CLOUD.dirty = true;
+  writeSync(Object.assign(readSync(), { dirty: true }));
+  clearTimeout(CLOUD.timer);
+  CLOUD.timer = setTimeout(cloudSync, delay);
+}
+
+async function wipeLocal() {
+  ['', '-prev'].forEach(x => { try { localStorage.removeItem(KEY + x); } catch (e) { /* ignore */ } });
+  try { localStorage.removeItem(SYNC_KEY); localStorage.removeItem('autopot-range'); } catch (e) { /* ignore */ }
+  photoCache.clear();
+  if (idb) { try { await idbRun('readwrite', s => s.clear()); } catch (e) { /* ignore */ } }
+  S = blank();
+}
+async function afterAuth(isNew) {
+  const me = await cloudApi('GET', '/api/me');
+  if (!me.ok) { setAcctMsg('Anmeldung fehlgeschlagen.', true); return false; }
+  CLOUD.user = { createdAt: me.data.createdAt };
+  const tag = String(me.data.createdAt), meta = readSync();
+  if (meta.tag && meta.tag !== tag) {
+    if (!confirm('Auf diesem Gerät liegen noch Daten eines anderen Kontos. Sie werden jetzt von diesem Gerät entfernt, damit sie nicht in dieses Konto gelangen (im anderen Konto bleiben sie erhalten, soweit synchronisiert).\n\nFortfahren?')) {
+      await cloudApi('POST', '/api/logout'); CLOUD.user = null; setSyncStatus('off'); renderAccount(); return false;
+    }
+    await wipeLocal(); loadSettings(); renderAll();
+  }
+  writeSync(Object.assign(readSync(), { tag }));
+  setSyncStatus('syncing');
+  const pulled = await cloudPull(true);
+  if (pulled && (isNew || !readSync().version || CLOUD.dirty)) { CLOUD.dirty = true; }
+  await cloudSync();
+  renderAccount();
+  return true;
+}
+async function cloudInit() {
+  if (!/^https?:$/.test(location.protocol)) return;
+  if (navigator.onLine === false) { window.addEventListener('online', () => cloudInit(), { once: true }); return; }
+  const cfg = await cloudApi('GET', '/api/config');
+  if (!cfg.ok || !cfg.data || typeof cfg.data.registration !== 'boolean') return;
+  CLOUD.available = true; CLOUD.registration = cfg.data.registration;
+  $('accountBtn').classList.remove('hidden');
+  const me = await cloudApi('GET', '/api/session');
+  if (me.ok && me.data.authenticated) {
+    CLOUD.user = { createdAt: me.data.createdAt };
+    const meta = readSync(); if (meta.lastSync) CLOUD.last = new Date(meta.lastSync);
+    setSyncStatus('syncing');
+    CLOUD.dirty = !!meta.dirty;
+    await cloudSync();
+  } else setSyncStatus(readSync().tag ? 'expired' : 'off');
+  renderAccount();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && CLOUD.user) cloudSync(); });
+  window.addEventListener('online', () => { if (CLOUD.user) cloudSync(); });
+  setInterval(() => { if (CLOUD.user && document.visibilityState === 'visible') cloudSync(); }, 120000);
+}
+
+/* ---------- Konto-Dialog ---------- */
+function setAcctMsg(t, bad) { const m = $('acctMsg'); m.textContent = t || ''; m.className = 'sub acct-msg' + (bad ? ' bad' : ''); }
+function showTab(tab) {
+  document.querySelectorAll('#acctTabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
+  document.querySelectorAll('[data-tabpane]').forEach(f => f.classList.toggle('hidden', f.dataset.tabpane !== tab));
+  setAcctMsg('');
+}
+function renderAccount() {
+  const btn = $('accountBtn'); if (!btn) return;
+  $('acctNA').classList.toggle('hidden', CLOUD.available);
+  $('acctOut').classList.toggle('hidden', !CLOUD.available || !!CLOUD.user);
+  $('acctIn').classList.toggle('hidden', !CLOUD.user);
+  const regTab = document.querySelector('#acctTabs [data-tab="register"]');
+  if (regTab) regTab.classList.toggle('hidden', CLOUD.registration === false);
+  $('acctSince').textContent = CLOUD.user ? `Konto seit ${new Date(CLOUD.user.createdAt).toLocaleDateString('de-DE')}` : '';
+  setSyncStatus(CLOUD.status);
+}
+function showRecovery(code) {
+  $('recoveryCode').textContent = code;
+  $('recoveryOk').checked = false; $('recoveryDone').disabled = true;
+  $('acctRecovery').classList.remove('hidden'); $('acctOut').classList.add('hidden'); $('acctIn').classList.add('hidden');
+  openDlg('accountDlg');
+}
+const formVals = f => Object.fromEntries([...f.elements].filter(e => e.name).map(e => [e.name, e.type === 'checkbox' ? e.checked : e.value]));
+async function submitAuth(kind, f) {
+  const v = formVals(f), btn = f.querySelector('button[type=submit]');
+  btn.disabled = true; setAcctMsg('Bitte warten …');
+  try {
+    if (kind === 'register') {
+      if (v.password !== v.password2) { setAcctMsg('Die Passwörter stimmen nicht überein.', true); return; }
+      if (!v.consent) { setAcctMsg('Bitte der Datenschutzerklärung zustimmen.', true); return; }
+    }
+    const url = { login: '/api/login', register: '/api/register', recover: '/api/recover' }[kind];
+    const body = kind === 'recover' ? { email: v.email, recoveryCode: v.recoveryCode, newPassword: v.newPassword } : { email: v.email, password: v.password };
+    const r = await cloudApi('POST', url, body);
+    if (r.status === 0) { setAcctMsg('Der Server ist nicht erreichbar.', true); return; }
+    if (!r.ok) { setAcctMsg((r.data && r.data.message) || 'Das hat nicht geklappt.', true); return; }
+    try { localStorage.setItem('autopot-email', v.email.trim()); } catch (e) { /* ignore */ }
+    f.reset();
+    const code = r.data.recoveryCode;
+    const ok = await afterAuth(kind === 'register');
+    if (ok && code) showRecovery(code); else if (ok) { closeDlg('accountDlg'); toast('Angemeldet.'); }
+  } finally { btn.disabled = false; }
+}
+async function cloudLogout() {
+  if (CLOUD.dirty) await cloudSync();
+  await cloudApi('POST', '/api/logout');
+  CLOUD.user = null; setSyncStatus('off');
+  if (confirm('Lokale Daten auf diesem Gerät entfernen?\n\nOK: Alles wird von diesem Gerät gelöscht (empfohlen auf fremden oder gemeinsam genutzten Geräten). Deine Daten bleiben in der Cloud.\nAbbrechen: Daten bleiben lokal erhalten.')) { await wipeLocal(); location.replace(location.pathname); return; }
+  renderAccount(); closeDlg('accountDlg'); toast('Abgemeldet.');
+}
+async function cloudExport() {
+  const r = await cloudApi('GET', '/api/export');
+  if (!r.ok) { toast('Export fehlgeschlagen.', true); return; }
+  download('autopot-cloud-export.json', JSON.stringify(r.data, null, 2), 'application/json');
+  toast('Cloud-Daten exportiert.');
+}
+function bindAccount() {
+  $('accountBtn').addEventListener('click', () => { renderAccount(); openDlg('accountDlg'); });
+  document.querySelectorAll('#acctTabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  [['login', 'loginForm'], ['register', 'registerForm'], ['recover', 'recoverForm']].forEach(([k, id]) => $(id).addEventListener('submit', ev => { ev.preventDefault(); submitAuth(k, $(id)); }));
+  $('recoveryOk').addEventListener('change', () => { $('recoveryDone').disabled = !$('recoveryOk').checked; });
+  $('recoveryDone').addEventListener('click', () => { $('acctRecovery').classList.add('hidden'); $('recoveryCode').textContent = ''; renderAccount(); closeDlg('accountDlg'); toast('Konto bereit. Deine Daten werden verschlüsselt synchronisiert.'); });
+  $('recoveryCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('recoveryCode').textContent); toast('Code kopiert.'); } catch (e) { toast('Kopieren nicht möglich – bitte markieren und abschreiben.', true); } });
+  $('recoverySave').addEventListener('click', () => download('autopot-wiederherstellungscode.txt', `AutoPot Grow – Wiederherstellungscode\r\n\r\n${$('recoveryCode').textContent}\r\n\r\nBewahre diese Datei sicher auf (z. B. im Passwortmanager). Wer den Code kennt, kann das Passwort zurücksetzen.\r\n`, 'text/plain;charset=utf-8'));
+  $('syncNow').addEventListener('click', () => { CLOUD.dirty = true; cloudSync(); });
+  $('logoutBtn').addEventListener('click', cloudLogout);
+  $('cloudExport').addEventListener('click', cloudExport);
+  $('pwForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const v = formVals($('pwForm')); if (v.newPassword !== v.newPassword2) { toast('Die neuen Passwörter stimmen nicht überein.', true); return; }
+    const r = await cloudApi('POST', '/api/password', { currentPassword: v.currentPassword, newPassword: v.newPassword });
+    if (!r.ok) { toast((r.data && r.data.message) || 'Passwortwechsel fehlgeschlagen.', true); return; }
+    $('pwForm').reset(); $('pwForm').closest('details').open = false;
+    toast('Passwort geändert. Es gibt einen neuen Wiederherstellungscode.'); showRecovery(r.data.recoveryCode);
+  });
+  $('delForm').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    if (!confirm('Konto und alle Cloud-Daten endgültig löschen? Das kann nicht rückgängig gemacht werden.')) return;
+    const r = await cloudApi('DELETE', '/api/account', { password: formVals($('delForm')).password });
+    if (!r.ok) { toast((r.data && r.data.message) || 'Löschen fehlgeschlagen.', true); return; }
+    CLOUD.user = null; await wipeLocal(); toast('Konto gelöscht.'); location.replace(location.pathname);
+  });
+  const em = (() => { try { return localStorage.getItem('autopot-email') || ''; } catch (e) { return ''; } })();
+  if (em) { document.querySelectorAll('#loginForm [name=email], #recoverForm [name=email]').forEach(i => { i.value = em; }); }
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('[data-act]');
+  if (!b) return;
+  const id = b.dataset.id;
+  switch (b.dataset.act) {
+    case 'lightbox': openLightbox(id); break;
+    case 'edit': startEdit(id); break;
+    case 'backup': exportJson(); break;
+    case 'tag': {
+      const cur = $('fTags').value.split(',').map(x => x.trim()).filter(Boolean);
+      if (!cur.includes(b.dataset.tag)) cur.push(b.dataset.tag);
+      $('fTags').value = cur.join(', ').slice(0, 120);
+      break;
+    }
+    case 'del-entry':
+      if (confirm('Diesen Eintrag löschen?')) { S.entries = S.entries.filter(e => e.id !== id); dropPhoto(id); if (editingId === id) resetForm(); save(); renderAll(); }
+      break;
+    case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); save(); renderLists(); break;
+    case 'del-event': S.events = S.events.filter(r => r.id !== id); save(); renderLists(); break;
+    case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); save(); renderArchive(); break;
+    case 'del-rem': S.reminders = S.reminders.filter(r => r.id !== id); save(); renderReminders(); break;
+    case 'rem-done': {
+      const r = S.reminders.find(x => x.id === id);
+      if (r) { r.lastDone = remInfo(r).done ? null : new Date().toISOString(); save(); renderReminders(); }
+      break;
+    }
+  }
+});
+document.addEventListener('change', ev => {
+  const c = ev.target.closest('[data-check]');
+  if (!c) return;
+  S.checks[c.dataset.check][c.dataset.i] = c.checked;
+  if (!c.checked) delete S.checks[c.dataset.check][c.dataset.i];
+  save(); renderDashboard();
+});
+
+async function init() {
+  await initPhotos();
+  fillSelect($('sPhase')); fillSelect($('fPhase')); fillSelect($('rPhase'), true); fillSelect($('lPhase'), true);
+  $('lPhase').options[0].textContent = 'Alle Phasen';
+  loadSettings(); resetForm(); renderSymptoms();
+  $('tDate').value = todayStr(); $('mDate').value = todayStr();
+  $('tagChips').innerHTML = QUICK_TAGS.map(t => `<button class="qchip" type="button" data-act="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
+  $('ppPpm').value = Math.round((num($('ppEc').value) || 0) * Number($('ppScale').value));
+  document.querySelectorAll('#rangeSeg button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.range) === rangeDays)));
+  applyTheme(readTheme());
+  renderAll();
+  bindChartHover();
+
+  ['sName', 'sStart', 'sTankSize', 'sTankRest', 'sDailyUse', 'sInterval'].forEach(id => $(id).addEventListener('input', onSettings));
+  $('sPhase').addEventListener('change', onSettings);
+  ['hDate', 'hWet', 'hDry', 'hWatt', 'hNote'].forEach(id => $(id).addEventListener('input', onHarvest));
+  ['vTemp', 'vRh', 'eBase', 'eTarget', 'eLiter', 'pCur', 'pTar', 'wOldL', 'wOldEc', 'wNewL', 'wNewEc', 'dPpfd', 'dHours', 'hLeaf'].forEach(id => $(id).addEventListener('input', renderCalc));
+  const ppFromEc = () => { const e = num($('ppEc').value); $('ppPpm').value = e == null ? '' : Math.round(e * Number($('ppScale').value)); };
+  $('ppEc').addEventListener('input', ppFromEc);
+  $('ppScale').addEventListener('change', ppFromEc);
+  $('ppPpm').addEventListener('input', () => { const p = num($('ppPpm').value); $('ppEc').value = p == null ? '' : Number((p / Number($('ppScale').value)).toFixed(2)); });
+
+  $('saveEntry').addEventListener('click', saveEntry);
+  $('cancelEdit').addEventListener('click', () => resetForm());
+  $('clearForm').addEventListener('click', () => resetForm());
+  $('photoRemove').addEventListener('click', () => setPhoto('', true));
+  $('fPhoto').addEventListener('change', async ev => {
+    const f = ev.target.files[0];
+    if (!f) return;
+    try { setPhoto(await resizeImage(f), true); } catch (e) { toast('Das Foto konnte nicht verarbeitet werden.', true); }
+  });
+  $('lSearch').addEventListener('input', () => { LF.q = $('lSearch').value; LF.limit = 25; renderLog(); });
+  $('lPhase').addEventListener('change', () => { LF.phase = $('lPhase').value; LF.limit = 25; renderLog(); });
+  $('lPhoto').addEventListener('change', () => { LF.photo = $('lPhoto').checked; LF.limit = 25; renderLog(); });
+  $('logMore').addEventListener('click', () => { LF.limit += 25; renderLog(); });
+  document.querySelectorAll('#rangeSeg button').forEach(b => b.addEventListener('click', () => {
+    rangeDays = Number(b.dataset.range);
+    try { localStorage.setItem('autopot-range', String(rangeDays)); } catch (e) { /* ignore */ }
+    document.querySelectorAll('#rangeSeg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    renderCharts();
+  }));
+
+  /* Daten-Dialog */
+  $('dataBtn').addEventListener('click', () => openDlg('dataDlg'));
+  $('moreBtn').addEventListener('click', () => openDlg('moreSheet'));
+  document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeDlg(b.dataset.close)));
+  document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', ev => { if (ev.target === d) closeDlg(d.id); }));
+  $('moreSheet').addEventListener('click', ev => {
+    const a = ev.target.closest('a');
+    if (!a) return;
+    closeDlg('moreSheet');
+    if (a.dataset.open) { ev.preventDefault(); openDlg(a.dataset.open); }
+  });
+  $('lbPrev').addEventListener('click', () => { if (lb.i > 0) { lb.i--; showLb(); } });
+  $('lbNext').addEventListener('click', () => { if (lb.i < lb.list.length - 1) { lb.i++; showLb(); } });
+  document.addEventListener('keydown', ev => {
+    if (!$('lightbox').open) return;
+    if (ev.key === 'ArrowLeft') $('lbPrev').click();
+    if (ev.key === 'ArrowRight') $('lbNext').click();
+  });
+
+  $('exportCsv').addEventListener('click', () => { closeDlg('dataDlg'); exportCsv(); });
+  $('backupJson').addEventListener('click', () => { closeDlg('dataDlg'); exportJson(); });
+  $('exportIcs').addEventListener('click', exportIcs);
+  $('restorePrev').addEventListener('click', restorePrev);
+  $('importFile').addEventListener('change', ev => { closeDlg('dataDlg'); if (ev.target.files[0]) importFile(ev.target.files[0]); ev.target.value = ''; });
+  $('tankChange').addEventListener('click', tankChange);
+  $('newGrow').addEventListener('click', newGrow);
+  ['printBtn', 'printBtn2'].forEach(id => $(id).addEventListener('click', () => { closeDlg('dataDlg'); setTimeout(() => window.print(), 50); }));
+  $('themeToggle').addEventListener('click', () => {
+    const order = ['system', 'light', 'dark'], next = order[(order.indexOf(readTheme()) + 1) % 3];
+    try { localStorage.setItem('autopot-theme', next); } catch (e) { /* ignore */ }
+    applyTheme(next); renderCharts();
+  });
+  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { applyTheme(readTheme()); renderCharts(); });
+
+  /* App installieren */
+  let deferred = null;
+  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferred = ev; $('installBtn').classList.remove('hidden'); });
+  window.addEventListener('appinstalled', () => { deferred = null; $('installBtn').classList.add('hidden'); toast('App installiert.'); });
+  $('installBtn').addEventListener('click', async () => {
+    if (!deferred) return;
+    deferred.prompt();
+    try { await deferred.userChoice; } catch (e) { /* ignore */ }
+    deferred = null; $('installBtn').classList.add('hidden');
+  });
+
+  $('saveRecipe').addEventListener('click', () => {
+    const name = $('rName').value.trim();
+    if (!name) { toast('Bitte einen Namen eingeben.', true); return; }
+    S.recipes.push({ id: uid(), name: name.slice(0, 60), phase: $('rPhase').value, text: $('rText').value.trim().slice(0, 500) });
+    save(); $('rName').value = ''; $('rText').value = ''; renderLists();
+  });
+  $('saveEvent').addEventListener('click', () => {
+    const date = $('tDate').value, title = $('tTitle').value.trim();
+    if (!date || !title) { toast('Datum und Ereignis angeben.', true); return; }
+    S.events.push({ id: uid(), date, title: title.slice(0, 80), note: $('tNote').value.trim().slice(0, 300) });
+    save(); $('tTitle').value = ''; $('tNote').value = ''; renderLists();
+  });
+  const addRem = (title, date, time, repeat) => { S.reminders.push({ id: uid(), title, date, time, repeat, lastDone: null, notified: null }); save(); tick(); };
+  $('saveRem').addEventListener('click', () => {
+    const title = $('mTitle').value.trim();
+    if (!title || !$('mDate').value) { toast('Aufgabe und Datum angeben.', true); return; }
+    addRem(title.slice(0, 80), $('mDate').value, $('mTime').value || '09:00', $('mRepeat').value);
+    $('mTitle').value = '';
+  });
+  $('tplMeasure').addEventListener('click', () => addRem('pH/EC messen', todayStr(), '09:00', 'daily'));
+  $('tplFilter').addEventListener('click', () => addRem('Tankfilter reinigen', todayStr(), '09:00', 'weekly'));
+  $('notifyBtn').addEventListener('click', async () => {
+    if (!('Notification' in window)) { toast('Benachrichtigungen werden nicht unterstützt.', true); return; }
+    try { await Notification.requestPermission(); } catch (e) { /* ignore */ }
+    renderReminders();
+  });
+  $('diagBtn').addEventListener('click', diagnose);
+  $('diagReset').addEventListener('click', () => { document.querySelectorAll('#symptoms input').forEach(x => { x.checked = false; }); $('diagOut').innerHTML = ''; });
+  $('weekReset').addEventListener('click', () => { S.checks.week = {}; save(); renderChecks(); renderDashboard(); });
+
+  let rt;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderCharts, 150); });
+  window.addEventListener('scroll', () => { if (!navRaf) navRaf = requestAnimationFrame(updateNav); }, { passive: true });
+  updateNav();
+  setInterval(tick, 60000);
+  tick();
+
+  /* Einblend-Animation (nicht bei reduzierter Bewegung) */
+  if ('IntersectionObserver' in window && !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    document.documentElement.classList.add('js-reveal');
+    const io = new IntersectionObserver(list => list.forEach(x => { if (x.isIntersecting) { x.target.classList.add('in'); io.unobserve(x.target); } }), { rootMargin: '0px 0px -4% 0px' });
+    document.querySelectorAll('main > section').forEach(s => io.observe(s));
+  }
+
+  bindAccount();
+  cloudInit().then(() => {
+    const mode = new URLSearchParams(location.search).get('mode');
+    if (CLOUD.available && !CLOUD.user && ['login', 'register'].includes(mode)) { showTab(mode); openDlg('accountDlg'); }
+  });
+
+  /* Offline-Nutzung (nur über http/https, nicht bei file://) */
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+init().catch(err => { console.error(err); toast('Fehler beim Start der App: ' + err.message, true); });
+})();

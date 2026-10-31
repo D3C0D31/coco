@@ -23,6 +23,14 @@ Bitte nicht öffentlich als Issue, sondern vertraulich an die in `/.well-known/s
 | Kompromittierter laufender Server | — | Wer den laufenden Prozess kontrolliert, sieht Passwörter beim Login und Daten angemeldeter Nutzer. **Keine Ende-zu-Ende-Verschlüsselung gegenüber dem Betreiber.** |
 | Verlust von Passwort und Code | — | Daten sind dann nicht wiederherstellbar (gewollt) |
 
+## Team-Bereich, News und geteilte Grows
+
+- Rollen `user`, `moderator`, `admin`. Die erste Admin-Rolle wird nur auf dem Server vergeben (`node server/admin.js role <ID> admin`).
+- Der Team-Bereich verlangt eine aktive Zwei-Faktor-Anmeldung (`STAFF_REQUIRE_2FA=0` schaltet das ab – nicht empfohlen). Moderatoren können News verwalten, Konten sperren/entsperren/abmelden und Meldungen bearbeiten; Löschen, Rollen, Einladungen und Einstellungen sind Admins vorbehalten. Niemand kann Konten mit gleicher oder höherer Rolle ändern.
+- Alle Team-Aktionen landen im Team-Protokoll (`audit`).
+- **Geteilte Grows sind bewusst unverschlüsselt** (öffentliche Momentaufnahme mit Einwilligung). Der Server übernimmt nur erlaubte Felder und geprüfte Bilddaten; die Freigabe-Seite gibt alles maskiert aus. Freigabe-Token: 128 Bit, Seite mit `noindex`.
+- News sind öffentlich und werden beim Anzeigen maskiert; erlaubt sind nur wenige Formatierungen und `http(s)`-Links mit `rel="noopener nofollow ugc"`.
+
 ## Bekannte Grenzen
 
 - Ein Prozess, eine Datenbank: kein Betrieb mehrerer Instanzen parallel (Rate-Limit-Zähler im Speicher, SQLite lokal).

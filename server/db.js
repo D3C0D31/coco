@@ -68,6 +68,28 @@ function migrate(db) {
       key TEXT PRIMARY KEY, n INTEGER NOT NULL, first INTEGER NOT NULL, until INTEGER NOT NULL);
       PRAGMA user_version = 3;`);
   }
+  if (db.prepare('PRAGMA user_version').get().user_version < 4) {
+    const u = cols('users');
+    if (!u.has('role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+    if (!u.has('display_name')) db.exec('ALTER TABLE users ADD COLUMN display_name TEXT');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS news (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, body TEXT NOT NULL,
+        published INTEGER NOT NULL DEFAULT 0, pinned INTEGER NOT NULL DEFAULT 0,
+        author_id INTEGER, author_name TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, published_at INTEGER);
+      CREATE INDEX IF NOT EXISTS news_pub ON news(published, pinned, published_at);
+      CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, actor_id INTEGER, actor_role TEXT, action TEXT NOT NULL, target TEXT, at INTEGER NOT NULL);
+      CREATE TABLE IF NOT EXISTS shares (
+        token TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL, data TEXT NOT NULL, created_at INTEGER NOT NULL, views INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0);
+      CREATE INDEX IF NOT EXISTS shares_user ON shares(user_id);
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, share_token TEXT NOT NULL REFERENCES shares(token) ON DELETE CASCADE,
+        reason TEXT NOT NULL, at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open');
+      PRAGMA user_version = 4;`);
+  }
 }
 
 /* Server-Geheimnis (Pepper für den E-Mail-Blindindex): Umgebungsvariable oder Datei mit 0600 */

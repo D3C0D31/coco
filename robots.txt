@@ -3,3 +3,5 @@ Allow: /$
 Allow: /anleitung
 Disallow: /app
 Disallow: /api/
+Disallow: /admin
+Disallow: /share

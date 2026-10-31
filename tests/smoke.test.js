@@ -116,7 +116,7 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   /* Backup mit Foto → alles löschen → Import stellt Foto wieder her */
   const bkPath = await viaData('#backupJson');
   const bj = JSON.parse(fs.readFileSync(bkPath, 'utf8'));
-  ok(bj.version === 6 && bj.deleted && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v6 (mit Löschmarkern), enthält das Foto');
+  ok(bj.version === 7 && bj.deleted && Array.isArray(bj.strains) && bj.harvest && Array.isArray(bj.archive) && bj.entries.length === 4 && bj.entries.some(e => /^data:image\//.test(e.photo)), 'Backup: Schema v7, enthält das Foto');
   await wipe();
   ok((await rowsCount()) === 1 && (await page.textContent('#logBody')).includes('Noch keine'), 'Foto: Speicher komplett geleert');
   await page.setInputFiles('#importFile', bkPath);
@@ -348,6 +348,47 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   await page.waitForSelector('#pwAsk[open]');
   await page.fill('#pwAskInput', 'Backup-Geheim-1'); await page.click('#pwAskOk');
   ok(await (async () => { for (let i = 0; i < 40; i++) { if ((await rowsCount()) === 2) return true; await page.waitForTimeout(150); } return false; })() && (await page.textContent('#logBody')).includes('Geheime-Notiz-77'), 'v6: verschlüsseltes Backup wiederhergestellt');
+
+
+  /* ---------- v9: Sorten, Fahrplan, Heute, Trends, Klimadaten, Vorher/Nachher ---------- */
+  await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');
+  await wipe();
+  const iso9 = off => page.evaluate(o => { const d = new Date(); d.setDate(d.getDate() + o); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }, off);
+  ok((await page.textContent('#planBody')).includes('Startdatum'), 'v9: Fahrplan ohne Startdatum mit Hinweis');
+  ok((await page.textContent('#todayList')).includes('Heute noch keine Messung'), 'v9: Heute-Karte erinnert ans Messen');
+  await page.fill('#stName', 'Gelato #41'); await page.fill('#stBreeder', 'Seed Junky'); await page.selectOption('#stType', 'photo'); await page.fill('#stWeeks', '8');
+  await page.click('#stSave');
+  await page.click('#strainList [data-act="strain-use"]');
+  ok((await page.inputValue('#sFlowerWeeks')) === '8' && (await page.textContent('#heroEyebrow')).includes('Gelato #41'), 'v9: Sorte übernimmt Blütedauer und erscheint im Kopf');
+  await page.fill('#sStart', await iso9(-50));
+  const planRows = await page.locator('#planBody tr').count();
+  ok(planRows === 14 && (await page.locator('#planBody tr.now').count()) === 1, 'v9: Fahrplan mit 14 Wochen und aktueller Woche (' + planRows + ')');
+  ok((await page.textContent('#planBody tr.now')).includes('Hauptblüte') || (await page.textContent('#planBody tr.now')).includes('Übergang'), 'v9: Aktuelle Fahrplan-Woche liegt in der Blüte');
+  ok((await page.textContent('#todayList')).includes('Fahrplan Woche 8'), 'v9: Heute-Karte zeigt Fahrplan-Woche');
+  for (const [off, ph] of [[-2, '5.8'], [-1, '6.0'], [0, '6.2']]) { await page.fill('#fDate', await iso9(off)); await page.fill('#fPh', ph); await page.fill('#fEc', '1.6'); await page.click('#saveEntry'); await page.waitForTimeout(100); }
+  ok((await page.textContent('#findings')).includes('Trend: Der pH steigt'), 'v9: Trendwarnung bei steigendem pH');
+  ok((await page.textContent('#todayList')).includes('Heute schon gemessen'), 'v9: Heute-Karte erkennt Messung');
+  const climPath = path.join(TMP, 'govee.csv');
+  const d1 = await iso9(-2), d4 = await iso9(-4);
+  fs.writeFileSync(climPath, 'Timestamp for sample frequency every 1 min,Temperature_Fahrenheit,Relative_Humidity\n' + [[d4, 77, 60], [d4, 79, 62], [d1, 75.2, 55], [d1, 76.1, 57]].map(([d, t, h], i) => `${d} 1${i}:00:00,${t},${h}`).join('\n'));
+  await page.setInputFiles('#climateFile', climPath);
+  await page.waitForTimeout(400);
+  ok((await rowsCount()) === 4 && (await page.textContent('#logBody')).includes('Hygrometer: 2 Werte'), 'v9: Hygrometer-CSV: neuer Tag angelegt, vorhandener ergänzt');
+  const climRow = await page.locator('#logBody tr', { hasText: d4.split('-').reverse().join('.') }).textContent();
+  ok(climRow.includes('25,6') && climRow.includes('61'), 'v9: Fahrenheit wird in °C umgerechnet, Tagesmittel (' + climRow.replace(/\s+/g, ' ').slice(0, 80) + ')');
+  for (const off of [-2, 0]) {
+    await page.locator('[data-act="edit"]').nth(off === 0 ? 0 : 2).click();
+    await page.setInputFiles('#fPhoto', pngPath); await page.waitForSelector('#photoPreview:not(.hidden)');
+    await page.click('#saveEntry'); await page.waitForTimeout(250);
+  }
+  await page.click('#cmpBtn');
+  await page.locator('#galleryGrid .gthumb').nth(0).click(); await page.locator('#galleryGrid .gthumb').nth(1).click();
+  ok(await page.evaluate(() => document.getElementById('cmpDlg').open) && (await page.textContent('#cmpCapB')).includes('Nachher'), 'v9: Vorher/Nachher-Vergleich öffnet');
+  await page.fill('#cmpRange', '20');
+  ok((await page.evaluate(() => document.getElementById('cmpB').style.clipPath)).includes('20%'), 'v9: Schieberegler verschiebt die Trennlinie');
+  await page.keyboard.press('Escape');
+  await page.click('#strainList [data-act="del-strain"]');
+  ok(!(await page.textContent('#heroEyebrow')).includes('Gelato'), 'v9: Sorte gelöscht, Grow ohne Sorte');
 
   /* ---------- Mobil & Direktstart ohne Server ---------- */
   await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');

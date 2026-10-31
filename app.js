@@ -80,13 +80,14 @@ function normPhase(p) {
 
 /* ---------- Datenmodell (Schema v5) ---------- */
 const blank = () => ({
-  version: 6,
-  settings: { name: '', phase: 'Vegetation', startDate: null, phaseStart: null, flowerStart: null, flowerWeeks: 9, lightHours: 18, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
+  version: 7,
+  settings: { name: '', phase: 'Vegetation', strainId: null, startDate: null, phaseStart: null, flowerStart: null, flowerWeeks: 9, lightHours: 18, tankSize: 40, tankRest: 30, dailyUse: 2, tankInterval: 14, lastTankChange: null, lastBackup: null, entriesSinceBackup: 0 },
   entries: [], recipes: [], events: [], reminders: [],
   checks: { setup: {}, week: {} },
   harvest: { date: '', wet: null, dry: null, watt: null, note: '' },
   archive: [],
-  deleted: { entries: {}, recipes: {}, events: {}, reminders: {}, archive: {} } /* Löschmarker für die Synchronisation */
+  strains: [],
+  deleted: { entries: {}, recipes: {}, events: {}, reminders: {}, archive: {}, strains: {} } /* Löschmarker für die Synchronisation */
 });
 
 function normEntry(e) {
@@ -126,6 +127,8 @@ function normalize(d) {
   const fw = num(s.flowerWeeks); out.settings.flowerWeeks = fw != null && fw >= 4 && fw <= 20 ? Math.round(fw) : 9;
   const lh = num(s.lightHours); out.settings.lightHours = lh != null && lh > 0 && lh <= 24 ? lh : (out.settings.phase === 'Hauptblüte' || out.settings.phase === 'Endphase' || out.settings.phase === 'Übergang / frühe Blüte' ? 12 : 18);
   out.entries = (Array.isArray(d.entries) ? d.entries : []).map(normEntry).filter(Boolean);
+  out.strains = (Array.isArray(d.strains) ? d.strains : []).filter(x => x && x.name).slice(0, 200).map(x => ({ id: String(x.id || uid()).slice(0, 40), name: String(x.name).slice(0, 60), breeder: String(x.breeder ?? '').slice(0, 60), type: ['photo', 'auto', 'unknown'].includes(x.type) ? x.type : 'unknown', flowerWeeks: Math.min(20, Math.max(4, Math.round(num(x.flowerWeeks) ?? 9))), notes: String(x.notes ?? '').slice(0, 300) }));
+  out.settings.strainId = typeof s.strainId === 'string' && out.strains.some(x => x.id === s.strainId) ? s.strainId : null;
   out.recipes = (Array.isArray(d.recipes) ? d.recipes : []).filter(r => r && r.name).map(r => ({ id: String(r.id || uid()), name: String(r.name).slice(0, 60), phase: String(r.phase ?? '').slice(0, 60), text: String(r.text ?? '').slice(0, 500) }));
   out.events = (Array.isArray(d.events) ? d.events : []).filter(e => e && /^\d{4}-\d{2}-\d{2}/.test(e.date || '') && e.title).map(e => ({ id: String(e.id || uid()), date: String(e.date).slice(0, 10), title: String(e.title).slice(0, 80), note: String(e.note ?? '').slice(0, 300) }));
   out.reminders = (Array.isArray(d.reminders) ? d.reminders : []).filter(r => r && r.title && /^\d{4}-\d{2}-\d{2}/.test(r.date || '')).map(r => ({
@@ -322,6 +325,15 @@ function findings() {
   if (td != null && td <= 2) out.push(['warn', `Der Tank reicht nur noch etwa ${td} Tag(e). Bald nachfüllen oder wechseln.`]);
   const tc = S.settings.lastTankChange, iv = S.settings.tankInterval;
   if (tc && iv && daysAgo(tc) >= iv) out.push(['warn', `Der letzte Tankwechsel war vor ${daysAgo(tc)} Tagen (Intervall ${iv} Tage). Wechsel fällig.`]);
+  /* Trends über die letzten Messungen */
+  const l3 = es.slice(-3), l2 = es.slice(-2);
+  if (l3.length === 3) {
+    const ph = l3.map(x => x.ph), ec = l3.map(x => x.ec), use = l3.map(x => x.use);
+    if (ph.every(v => v != null) && ph[0] < ph[1] && ph[1] < ph[2] && ph[2] - ph[0] >= 0.3) out.push(['warn', `Trend: Der pH steigt seit drei Messungen (${fmtPh(ph[0])} → ${fmtPh(ph[2])}). Tank-pH prüfen und nachregeln.`]);
+    if (ec.every(v => v != null) && use.every(v => v != null) && ec[0] < ec[1] && ec[1] < ec[2] && ec[2] - ec[0] >= 0.3 && use[2] < use[0]) out.push(['warn', `Trend: Der EC steigt (${nf(ec[0])} → ${nf(ec[2])}), während der Verbrauch sinkt – möglicher Salzaufbau oder ein Wurzelproblem (Anleitung Kap. 14).`]);
+  }
+  if (l2.length === 2 && l2.every(x => x.waterTemp != null && x.waterTemp > WATER_RANGE[1])) out.push(['warn', 'Trend: Wassertemperatur zweimal in Folge über 22 °C – weniger Sauerstoff an den Wurzeln, mehr Risiko für Wurzelfäule. Tank kühler stellen.']);
+  if (l2.length === 2 && ['Hauptblüte', 'Endphase'].includes(pn) && l2.every(x => x.humidity != null && x.humidity > 60)) out.push(['warn', 'Trend: Luftfeuchte in der Blüte zweimal über 60 % – erhöhte Schimmelgefahr. Entfeuchten und Umluft verbessern.']);
   if (!out.length) out.push(['ok', 'Letzte Messwerte liegen im Zielbereich.']);
   const since = S.settings.entriesSinceBackup || 0;
   if (!S.settings.lastBackup) {
@@ -359,6 +371,8 @@ function setState(id, cls) { const el = $(id); if (cls === 'ok' || cls === 'warn
 function renderHero() {
   const gi = growInfo();
   $('heroName').textContent = S.settings.name || 'Mein Grow';
+  const stx = activeStrain();
+  $('heroEyebrow').textContent = stx ? `Dein Grow · ${stx.name} · ${STRAIN_TYPES[stx.type]}` : 'Dein Grow';
   if (gi) {
     $('heroDay').textContent = `Tag ${gi.day} · Woche ${gi.week}`;
     $('heroSub').textContent = `${S.settings.phase}${S.settings.phaseStart ? ` seit ${gi.phaseDays} ${gi.phaseDays === 1 ? 'Tag' : 'Tagen'}` : ''} · Start ${fmtDate(gi.start)}${gi.derived ? ' (erster Eintrag)' : ''}`;
@@ -380,7 +394,7 @@ function renderHero() {
 }
 
 function renderDashboard() {
-  renderHero(); renderTip(); renderWeekly();
+  renderHero(); renderTip(); renderWeekly(); if ($('todayList')) renderToday();
   const es = sorted(), e = es[es.length - 1];
   const pn = e && PROFILE[e.phase] ? e.phase : S.settings.phase, p = PROFILE[pn];
   const v = e ? vpdOf(e) : null;
@@ -761,7 +775,7 @@ function renderChecks() {
 }
 
 function renderAll() {
-  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks(); if ($('refTable')) { renderKnowledge(); renderPower(); }
+  renderDashboard(); renderLog(); renderGallery(); renderCharts(); renderCalc(); renderHarvest(); renderArchive(); renderLists(); renderReminders(); renderChecks(); if ($('refTable')) { renderKnowledge(); renderPower(); renderPlan(); renderStrains(); }
 }
 
 /* ---------- Formular ---------- */
@@ -974,7 +988,7 @@ function onSettings() {
   }
   save();
   if (!editingId) $('fPhase').value = s.phase;
-  renderDashboard(); renderCharts(); renderCalc(); renderHarvest(); renderKnowledge(); renderPower();
+  renderCharts(); renderCalc(); renderHarvest(); renderKnowledge(); renderPower(); renderPlan(); renderDashboard();
 }
 function onHarvest() {
   S.harvest = { date: /^\d{4}-\d{2}-\d{2}$/.test($('hDate').value) ? $('hDate').value : '', wet: num($('hWet').value), dry: num($('hDry').value), watt: num($('hWatt').value), note: $('hNote').value.slice(0, 300) };
@@ -1004,7 +1018,7 @@ function newGrow() {
   S.archive.unshift(item);
   markDeleted('entries', S.entries.map(e => e.id)); markDeleted('events', S.events.map(e => e.id));
   S.entries = []; S.events = []; S.harvest = blank().harvest; S.checks.week = {};
-  Object.assign(S.settings, { startDate: null, phaseStart: null, flowerStart: null, lastTankChange: null, phase: PHASES[0], lightHours: 18, tankRest: S.settings.tankSize });
+  Object.assign(S.settings, { strainId: null, startDate: null, phaseStart: null, flowerStart: null, lastTankChange: null, phase: PHASES[0], lightHours: 18, tankRest: S.settings.tankSize });
   [...photoCache.keys()].forEach(id => { if (!keep.has(id)) dropPhoto(id); });
   save(); loadSettings(); resetForm(); renderAll();
   toast('Grow archiviert. Neues Protokoll gestartet.');
@@ -1037,7 +1051,7 @@ function openLightbox(id) {
   lb.i = Math.max(0, lb.list.indexOf(id));
   showLb(); openDlg('lightbox');
 }
-const SECTIONS = ['dashboard', 'log', 'charts', 'gallery', 'calc', 'harvest', 'recipes', 'timeline', 'reminders', 'diagnose', 'checks'];
+const SECTIONS = ['dashboard', 'log', 'charts', 'gallery', 'calc', 'plan', 'wissen', 'strains', 'harvest', 'recipes', 'timeline', 'reminders', 'diagnose', 'checks'];
 let navRaf = 0;
 function updateNav() {
   navRaf = 0;
@@ -1203,6 +1217,208 @@ function bindPwMeters() {
   });
 }
 
+/* ---------- Sorten, Fahrplan, Heute, News, Teilen, Klimadaten, Vergleich ---------- */
+const STRAIN_TYPES = { photo: 'Photoperiodisch', auto: 'Autoflower', unknown: 'unbekannt' };
+const activeStrain = () => S.strains.find(x => x.id === S.settings.strainId) || null;
+function renderStrains() {
+  const cur = S.settings.strainId;
+  $('strainList').innerHTML = S.strains.map(x => `<div class="item${x.id === cur ? ' current' : ''}"><div><strong>${esc(x.name)}</strong> <span class="chip mute">${esc(STRAIN_TYPES[x.type] || 'unbekannt')}</span>${x.id === cur ? ' <span class="chip ok">aktueller Grow</span>' : ''}<p class="meta">${x.breeder ? esc(x.breeder) + ' · ' : ''}Blüte ${x.flowerWeeks} Wochen</p>${x.notes ? `<p>${esc(x.notes)}</p>` : ''}</div><div class="rowact"><button class="btn small" data-act="strain-use" data-id="${esc(x.id)}" type="button"${x.id === cur ? ' disabled' : ''}>Für aktuellen Grow</button><button class="btn small danger" data-act="del-strain" data-id="${esc(x.id)}" type="button" aria-label="Sorte löschen">✕</button></div></div>`).join('') || '<p class="sub">Noch keine Sorten. Lege deine Sorten mit Blütedauer an – die App übernimmt sie für Ernteprognose und Fahrplan.</p>';
+}
+function saveStrain() {
+  const name = $('stName').value.trim();
+  if (!name) { toast('Bitte einen Sortennamen eingeben.', true); return; }
+  const w = num($('stWeeks').value);
+  if (w == null || w < 4 || w > 20) { toast('Blütedauer bitte zwischen 4 und 20 Wochen angeben.', true); return; }
+  S.strains.push({ id: uid(), name: name.slice(0, 60), breeder: $('stBreeder').value.trim().slice(0, 60), type: $('stType').value, flowerWeeks: Math.round(w), notes: $('stNotes').value.trim().slice(0, 300) });
+  ['stName', 'stBreeder', 'stNotes'].forEach(id => { $(id).value = ''; });
+  save(); renderStrains(); toast('Sorte gespeichert.');
+}
+function useStrain(id) {
+  const x = S.strains.find(s => s.id === id);
+  if (!x) return;
+  S.settings.strainId = x.id; S.settings.flowerWeeks = x.flowerWeeks;
+  if (x.type === 'auto') S.settings.lightHours = Math.max(S.settings.lightHours, 18);
+  save(); loadSettings(); renderAll();
+  toast(`„${x.name}“ ist jetzt die Sorte des aktuellen Grows (Blüte ${x.flowerWeeks} Wochen${x.type === 'auto' ? ', Autoflower: Licht bleibt bei 18 h+' : ''}).`);
+}
+
+/* Fahrplan: Woche für Woche mit Zielwerten aus der Anleitung */
+function buildPlan() {
+  const s = S.settings, es = sorted(), start = s.startDate || (es[0] && es[0].date);
+  if (!start) return null;
+  const st = activeStrain(), auto = !!(st && st.type === 'auto');
+  const addD = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoOf(d); };
+  const fw = s.flowerWeeks;
+  const flowerStart = s.flowerStart || addD(start, (auto ? 3 : 6) * 7);
+  const weeks = Math.min(40, Math.ceil((dayDiff(start, flowerStart) + fw * 7) / 7));
+  const today = todayStr(), rows = [];
+  for (let w = 0; w < weeks; w++) {
+    const from = addD(start, w * 7), to = addD(start, w * 7 + 6), into = dayDiff(flowerStart, from);
+    const phase = w < 2 ? PHASES[0] : into < 0 ? 'Vegetation' : into < 14 ? PHASES[2] : into < (fw - 1) * 7 ? 'Hauptblüte' : 'Endphase';
+    const now = today >= from && today <= to, ref = now ? dayDiff(flowerStart, today) : into; /* aktuelle Woche: Blütewoche ab heute gerechnet, passend zur Prognose oben */
+    rows.push({ w: w + 1, from, to, phase, light: auto ? 18 : (into >= 0 || (now && ref >= 0) ? 12 : 18), now, fweek: ref >= 0 ? Math.floor(ref / 7) + 1 : null });
+  }
+  return { rows, estimated: !s.flowerStart, harvest: addD(flowerStart, fw * 7), auto, flowerStart };
+}
+function renderPlan() {
+  const p = buildPlan();
+  if (!p) { $('planBody').innerHTML = '<tr><td colspan="9">Startdatum im Bereich „Aktueller Grow“ eintragen – dann entsteht hier dein Fahrplan.</td></tr>'; $('planNote').textContent = ''; return; }
+  $('planBody').innerHTML = p.rows.map(r => {
+    const pr = PROFILE[r.phase];
+    return `<tr${r.now ? ' class="now" aria-current="date"' : ''}><td class="num">${r.w}${r.now ? ' ◀' : ''}</td><td class="num">${esc(fmtDate(r.from).slice(0, 6))}–${esc(fmtDate(r.to).slice(0, 6))}</td><td>${esc(r.phase)}${r.fweek ? ` <span class="sub">(Blüte W${r.fweek})</span>` : ''}</td><td class="num">${r.light} h</td><td class="num">${r.phase === 'Endphase' ? 'absenken' : rng(pr.ec)}</td><td class="num">${rng(pr.vpd)}</td><td class="num">${pr.temp[0]}–${pr.temp[1]} °C</td><td class="num">${pr.rh[0]}–${pr.rh[1]} %</td><td class="num">${pr.ppfd ? pr.ppfd[0] + '–' + pr.ppfd[1] : '–'}</td></tr>`;
+  }).join('');
+  const st = activeStrain();
+  $('planNote').textContent = `${st ? `Sorte: ${st.name} (${STRAIN_TYPES[st.type]}). ` : ''}Blütedauer ${S.settings.flowerWeeks} Wochen · voraussichtliche Ernte ab ${fmtDate(p.harvest)}.${p.estimated ? ` Blütebeginn noch nicht eingetragen – angenommen ab ${fmtDate(p.flowerStart)} (${p.auto ? 'Autoflower: ca. Woche 4' : '2 Wochen Jungpflanze + 4 Wochen Vegetation'}).` : ''} Richtwerte aus der Anleitung (Kap. 7, 9, 10) – Orientierung, keine Vorgabe.`;
+}
+
+/* „Heute“: was steht an? */
+function renderToday() {
+  const t = todayStr(), items = [];
+  items.push(S.entries.some(e => e.date === t) ? ['ok', '✅ Heute schon gemessen'] : ['warn', '📝 Heute noch keine Messung', '#log']);
+  S.reminders.forEach(r => { const i = remInfo(r); if (!i.done && i.due && isoOf(i.due) <= t) items.push(['warn', `⏰ ${r.title}`, '#reminders']); });
+  const td = tankDays();
+  if (td != null && td <= 3) items.push(['warn', `💧 Tank reicht nur noch etwa ${td} Tag(e)`]);
+  const tc = S.settings.lastTankChange;
+  if (tc && daysAgo(tc) >= S.settings.tankInterval) items.push(['warn', '🔄 Tankwechsel ist fällig']);
+  const p = buildPlan(), cur = p && p.rows.find(r => r.now);
+  if (cur) {
+    items.push(['', `📅 Fahrplan Woche ${cur.w}: ${cur.phase}${cur.fweek ? ` (Blütewoche ${cur.fweek})` : ''}, ${cur.light} h Licht`, '#plan']);
+    if (cur.phase !== S.settings.phase && !p.estimated) items.push(['warn', `Laut Fahrplan wäre jetzt „${cur.phase}“ – Phase im Bereich „Aktueller Grow“ anpassen?`]);
+  }
+  if (!S.settings.lastBackup || Date.now() - Date.parse(S.settings.lastBackup) > 14 * 864e5) if (!CLOUD.user) items.push(['warn', '💾 Backup älter als 14 Tage']);
+  $('todayList').innerHTML = items.map(([c, txt, href]) => `<li class="${c}">${href ? `<a href="${href}">${esc(txt)}</a>` : esc(txt)}</li>`).join('');
+}
+
+/* News-Vorschau, Ankündigung, Team-Knopf */
+async function loadNewsTeaser(cfg) {
+  const ann = cfg && cfg.announcement ? String(cfg.announcement) : '';
+  const annKey = 'autopot-ann-' + cloudPhotoId(ann).slice(1);
+  let dismissed = false; try { dismissed = !!localStorage.getItem(annKey); } catch (e) { /* ignore */ }
+  $('announceBox').innerHTML = ann && !dismissed ? `<div class="notice announce"><span>📢 ${esc(ann)}</span><button class="btn small" data-act="ann-close" data-key="${esc(annKey)}" type="button" aria-label="Ankündigung ausblenden">✕</button></div>` : '';
+  const r = await cloudApi('GET', '/api/news?limit=3');
+  if (!r.ok || !r.data || !Array.isArray(r.data.items)) return;
+  let seen = 0; try { seen = Number(localStorage.getItem('autopot-news-seen')) || 0; } catch (e) { /* ignore */ }
+  const items = r.data.items, unread = items.filter(n => n.id > seen).length;
+  $('newsLink').classList.remove('hidden');
+  $('newsDot').textContent = unread; $('newsDot').classList.toggle('hidden', !unread);
+  const plain = s => (window.NewsFmt ? window.NewsFmt.plain(s, 140) : String(s).slice(0, 140));
+  $('newsBox').innerHTML = items.length ? `<div class="panel" style="background:var(--glass)"><div class="head" style="margin-bottom:6px"><h3 style="margin:0">📰 Neuigkeiten</h3><a class="btn small" href="news.html">Alle News</a></div>${items.map(n => `<a class="newsitem" href="news.html#post-${n.id}"><strong>${esc(n.title)}</strong>${n.id > seen ? ' <span class="chip ok">neu</span>' : ''}${n.pinned ? ' 📌' : ''}<span class="sub">${esc(new Date(n.publishedAt).toLocaleDateString('de-DE'))} · ${esc(plain(n.body))}</span></a>`).join('')}</div>` : '';
+}
+function setRole(role) { CLOUD.role = role || 'user'; $('teamBtn').classList.toggle('hidden', !['moderator', 'admin'].includes(CLOUD.role)); }
+
+/* Grow teilen */
+async function openShare() {
+  if (!CLOUD.available) { toast('Teilen geht nur, wenn die App über den AutoPot-Server läuft.', true); return; }
+  if (!CLOUD.user) { toast('Zum Teilen bitte zuerst anmelden.', true); renderAccount(); openDlg('accountDlg'); return; }
+  $('shTitle').value = (S.settings.name || 'Mein Grow').slice(0, 80); $('shResult').innerHTML = '';
+  openDlg('shareDlg'); loadMyShares();
+}
+async function loadMyShares() {
+  const r = await cloudApi('GET', '/api/shares/mine');
+  if (!r.ok) { $('shList').innerHTML = ''; return; }
+  $('shList').innerHTML = r.data.shares.map(x => `<div class="item"><div><strong>${esc(x.title)}</strong>${x.hidden ? ' <span class="chip bad">vom Team entfernt</span>' : ''}<p class="meta">${esc(new Date(x.createdAt).toLocaleDateString('de-DE'))} · ${x.views} Aufrufe · ${Math.round(x.bytes / 1024)} KB</p></div><div class="rowact">${x.hidden ? '' : `<a class="btn small" href="share.html#${esc(x.token)}" target="_blank" rel="noopener">Öffnen</a><button class="btn small" data-act="share-copy" data-id="${esc(x.token)}" type="button">Link kopieren</button>`}<button class="btn small danger" data-act="share-del" data-id="${esc(x.token)}" type="button">Nicht mehr teilen</button></div></div>`).join('') || '<p class="sub">Du teilst derzeit keinen Grow.</p>';
+}
+const shareUrl = token => `${location.origin}/share.html#${token}`;
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('Link kopiert.'); } catch (e) { toast('Kopieren nicht möglich – bitte den Link markieren.', true); } }
+async function createShare() {
+  if (!$('shConsent').checked) { toast('Bitte bestätigen, dass der Grow öffentlich sichtbar sein darf.', true); return; }
+  const st = activeStrain(), es = sorted();
+  const photos = $('shPhotos').checked ? es.filter(e => photoCache.has(e.id)).slice(-12).map(e => ({ date: e.date, data: photoCache.get(e.id) })) : [];
+  const body = {
+    title: $('shTitle').value.trim() || 'Mein Grow', includeNotes: $('shNotes').checked, photos, harvest: S.harvest,
+    grow: { name: S.settings.name, strain: st ? st.name : '', breeder: st ? st.breeder : '', type: st ? STRAIN_TYPES[st.type] : '', start: S.settings.startDate || (es[0] && es[0].date) || null, phase: S.settings.phase, flowerStart: S.settings.flowerStart, flowerWeeks: S.settings.flowerWeeks, lightHours: S.settings.lightHours },
+    entries: es.map(e => ({ date: e.date, phase: e.phase, ec: e.ec, ph: e.ph, waterTemp: e.waterTemp, airTemp: e.airTemp, humidity: e.humidity, ppfd: e.ppfd, use: e.use, height: e.height, note: e.note }))
+  };
+  $('shCreate').disabled = true;
+  const r = await cloudApi('POST', '/api/shares', body);
+  $('shCreate').disabled = false;
+  if (!r.ok) { toast((r.data && r.data.message) || 'Teilen fehlgeschlagen.', true); return; }
+  const url = shareUrl(r.data.token);
+  $('shResult').innerHTML = `<div class="notice ok"><span>Dein Grow ist jetzt unter diesem Link sichtbar:</span></div><input class="sharelink" id="shLink" readonly value="${esc(url)}" aria-label="Link zum geteilten Grow"><div class="row"><button class="btn primary small" data-act="share-copy" data-id="${esc(r.data.token)}" type="button">Link kopieren</button><a class="btn small" href="${esc(url)}" target="_blank" rel="noopener">Öffnen</a></div>`;
+  loadMyShares();
+}
+
+/* Klimadaten aus Hygrometer-CSV (z. B. Govee, Inkbird, SensorPush): Tagesmittel übernehmen */
+function parseStamp(v) {
+  const s = String(v || '').trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  m = /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})/.exec(s);
+  if (m) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${pad2(m[2])}-${pad2(m[1])}`;
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  if (m) return `${m[3]}-${pad2(m[1])}-${pad2(m[2])}`;
+  if (/^\d{10}(\d{3})?$/.test(s)) { const n = Number(s); return isoOf(new Date(s.length === 10 ? n * 1000 : n)); }
+  return null;
+}
+function parseClimateCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return [];
+  const head = rows[0].map(h => h.toLowerCase());
+  const ti = head.findIndex(h => /zeit|time|datum|date|timestamp/.test(h));
+  const te = head.findIndex(h => /temp/.test(h) && !/tau|dew|punkt/.test(h));
+  const hu = head.findIndex(h => /feucht|humid|\brh\b|\brf\b/.test(h));
+  if (ti < 0 || te < 0 || hu < 0) return null;
+  const fahr = /°f|fahrenheit|\(f\)|_f\b/.test(head[te]);
+  const days = new Map();
+  rows.slice(1).forEach(r => {
+    const d = parseStamp(r[ti]), t = num(r[te]), h = num(r[hu]);
+    if (!d || t == null || h == null || h < 0 || h > 100) return;
+    const c = fahr ? (t - 32) * 5 / 9 : t;
+    if (c < -20 || c > 60) return;
+    const g = days.get(d) || { t: [], h: [] }; g.t.push(c); g.h.push(h); days.set(d, g);
+  });
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  return [...days.entries()].sort().map(([date, g]) => ({ date, t: avg(g.t), tmin: Math.min(...g.t), tmax: Math.max(...g.t), h: avg(g.h), hmin: Math.min(...g.h), hmax: Math.max(...g.h), n: g.t.length }));
+}
+function importClimate(file) {
+  const rd = new FileReader();
+  rd.onerror = () => toast('Datei konnte nicht gelesen werden.', true);
+  rd.onload = () => {
+    const days = parseClimateCsv(String(rd.result));
+    if (days === null) { toast('Keine passenden Spalten gefunden (Zeit, Temperatur, Luftfeuchte).', true); return; }
+    if (!days.length) { toast('Keine gültigen Messwerte in der Datei.', true); return; }
+    let added = 0, updated = 0;
+    days.forEach(d => {
+      const t = Math.round(d.t * 10) / 10, h = Math.round(d.h);
+      const sum = `Hygrometer: ${d.n} Werte, ${nf(d.tmin, 1)}–${nf(d.tmax, 1)} °C, ${nf(d.hmin, 0)}–${nf(d.hmax, 0)} % rF`;
+      const e = S.entries.find(x => x.date === d.date);
+      if (e) {
+        let ch = false;
+        if (e.airTemp == null) { e.airTemp = t; ch = true; }
+        if (e.humidity == null) { e.humidity = h; ch = true; }
+        if (ch) { updated++; if (!e.note.includes('Hygrometer:')) e.note = (e.note ? e.note + ' · ' : '') + sum; }
+      } else {
+        const n = normEntry({ id: uid(), date: d.date, phase: S.settings.phase, airTemp: t, humidity: h, tags: 'Sensor', note: sum });
+        if (n) { S.entries.push(n); added++; }
+      }
+    });
+    S.settings.entriesSinceBackup = (S.settings.entriesSinceBackup || 0) + added;
+    if (save()) { renderAll(); toast(`Klimadaten übernommen: ${added} neue Tage, ${updated} Einträge ergänzt (vorhandene Werte bleiben unverändert).`); }
+  };
+  rd.readAsText(file);
+}
+
+/* Vorher/Nachher-Vergleich in der Galerie */
+const CMP = { on: false, ids: [] };
+function toggleCompare(on) {
+  CMP.on = on; CMP.ids = [];
+  $('cmpBtn').textContent = on ? '✕ Vergleich abbrechen' : '↔ Vorher/Nachher';
+  $('cmpHint').classList.toggle('hidden', !on);
+  document.querySelectorAll('#galleryGrid .gthumb').forEach(b => b.classList.remove('sel'));
+}
+function pickCompare(id) {
+  const i = CMP.ids.indexOf(id);
+  if (i >= 0) CMP.ids.splice(i, 1); else CMP.ids.push(id);
+  document.querySelectorAll('#galleryGrid .gthumb').forEach(b => b.classList.toggle('sel', CMP.ids.includes(b.dataset.id)));
+  if (CMP.ids.length === 2) {
+    const [a, b] = CMP.ids.map(x => S.entries.find(e => e.id === x)).sort((x, y) => x.date.localeCompare(y.date));
+    $('cmpA').src = photoCache.get(a.id); $('cmpB').src = photoCache.get(b.id);
+    $('cmpCapA').textContent = `Vorher: ${fmtDate(a.date)}`; $('cmpCapB').textContent = `Nachher: ${fmtDate(b.date)} (+${dayDiff(a.date, b.date)} Tage)`;
+    $('cmpRange').value = 50; $('cmpB').style.clipPath = 'inset(0 0 0 50%)';
+    toggleCompare(false); openDlg('cmpDlg');
+  }
+}
+
 /* ---------- Cloud-Konto & Synchronisation ---------- */
 const CLOUD = { available: false, user: null, status: 'off', last: null, busy: false, again: false, dirty: false, applying: false, timer: null };
 const SYNC_KEY = 'autopot-sync';
@@ -1241,7 +1457,7 @@ function mergeStates(preferred, other) {
   const o = normalize(JSON.parse(ser(other)));
   const ids = new Set(out.entries.map(e => e.id)), keys = new Set(out.entries.map(entryKey));
   o.entries.forEach(e => { if (!ids.has(e.id) && !keys.has(entryKey(e))) { out.entries.push(e); ids.add(e.id); keys.add(entryKey(e)); } });
-  ['recipes', 'events', 'reminders', 'archive'].forEach(k => {
+  ['recipes', 'events', 'reminders', 'archive', 'strains'].forEach(k => {
     const have = new Set(out[k].map(x => x.id));
     o[k].forEach(x => { if (!have.has(x.id)) out[k].push(x); });
   });
@@ -1253,7 +1469,7 @@ function mergeStates(preferred, other) {
   });
   return out;
 }
-const hasLocalData = () => S.entries.length || S.recipes.length || S.events.length || S.settings.name || S.archive.length;
+const hasLocalData = () => S.entries.length || S.strains.length || S.recipes.length || S.events.length || S.settings.name || S.archive.length;
 function applyState(next) {
   CLOUD.applying = true;
   try { S = next; save(); } finally { CLOUD.applying = false; }
@@ -1361,6 +1577,7 @@ async function afterAuth(isNew) {
   const me = await cloudApi('GET', '/api/me');
   if (!me.ok) { setAcctMsg('Anmeldung fehlgeschlagen.', true); return false; }
   CLOUD.user = { createdAt: me.data.createdAt };
+  setRole(me.data.role);
   const tag = String(me.data.createdAt), meta = readSync();
   if (meta.tag && meta.tag !== tag) {
     if (!confirm('Auf diesem Gerät liegen noch Daten eines anderen Kontos. Sie werden jetzt von diesem Gerät entfernt, damit sie nicht in dieses Konto gelangen (im anderen Konto bleiben sie erhalten, soweit synchronisiert).\n\nFortfahren?')) {
@@ -1381,10 +1598,12 @@ async function cloudInit() {
   if (navigator.onLine === false) { window.addEventListener('online', () => cloudInit(), { once: true }); return; }
   const cfg = await cloudApi('GET', '/api/config');
   if (!cfg.ok || !cfg.data || typeof cfg.data.registration !== 'boolean') return;
+  loadNewsTeaser(cfg.data);
   CLOUD.available = true; CLOUD.registration = cfg.data.registration; CLOUD.mode = cfg.data.mode || (cfg.data.registration ? 'open' : 'closed'); CLOUD.pow = Number(cfg.data.pow) || 0;
   $('accountBtn').classList.remove('hidden');
   const me = await cloudApi('GET', '/api/session');
   if (me.ok && me.data.authenticated) {
+    setRole(me.data.role);
     CLOUD.user = { createdAt: me.data.createdAt };
     const meta = readSync(); if (meta.lastSync) CLOUD.last = new Date(meta.lastSync);
     setSyncStatus('syncing');
@@ -1600,7 +1819,7 @@ document.addEventListener('click', ev => {
   if (!b) return;
   const id = b.dataset.id;
   switch (b.dataset.act) {
-    case 'lightbox': openLightbox(id); break;
+    case 'lightbox': if (CMP.on) pickCompare(id); else openLightbox(id); break;
     case 'edit': startEdit(id); break;
     case 'backup': exportJson(); break;
     case 'tag': {
@@ -1626,6 +1845,11 @@ document.addEventListener('click', ev => {
     }
     case 'del-recipe': S.recipes = S.recipes.filter(r => r.id !== id); markDeleted('recipes', id); save(); renderLists(); break;
     case 'del-event': S.events = S.events.filter(r => r.id !== id); markDeleted('events', id); save(); renderLists(); break;
+    case 'strain-use': useStrain(id); break;
+    case 'del-strain': S.strains = S.strains.filter(x => x.id !== id); markDeleted('strains', id); if (S.settings.strainId === id) S.settings.strainId = null; save(); renderStrains(); renderHero(); renderPlan(); break;
+    case 'share-copy': copyText(shareUrl(id)); break;
+    case 'share-del': (async () => { if (!confirm('Diesen Grow nicht mehr teilen? Der Link funktioniert danach nicht mehr.')) return; const r = await cloudApi('DELETE', '/api/shares/' + id); toast(r.ok ? 'Freigabe beendet.' : 'Das hat nicht geklappt.', !r.ok); loadMyShares(); })(); break;
+    case 'ann-close': try { localStorage.setItem(b.dataset.key, '1'); } catch (e) { /* ignore */ } $('announceBox').innerHTML = ''; break;
     case 'del-archive': S.archive = S.archive.filter(r => r.id !== id); markDeleted('archive', id); save(); renderArchive(); break;
     case 'del-rem': S.reminders = S.reminders.filter(r => r.id !== id); markDeleted('reminders', id); save(); renderReminders(); break;
     case 'rem-done': {
@@ -1727,7 +1951,13 @@ async function init() {
   $('pwHours').addEventListener('input', () => { $('pwHours').dataset.touched = '1'; renderPower(); });
   ['sLight', 'sFlowerWeeks', 'sFlowerStart'].forEach(id => $(id).addEventListener('input', onSettings));
   bindPwMeters();
-  renderKnowledge(); renderPower();
+  renderKnowledge(); renderPower(); renderPlan(); renderStrains(); renderToday();
+  $('stSave').addEventListener('click', saveStrain);
+  $('shareBtn').addEventListener('click', openShare);
+  $('shCreate').addEventListener('click', createShare);
+  $('climateFile').addEventListener('change', ev => { closeDlg('dataDlg'); if (ev.target.files[0]) importClimate(ev.target.files[0]); ev.target.value = ''; });
+  $('cmpBtn').addEventListener('click', () => { if (photoCache.size < 2) { toast('Für einen Vergleich braucht es mindestens zwei Fotos.', true); return; } toggleCompare(!CMP.on); });
+  $('cmpRange').addEventListener('input', () => { $('cmpB').style.clipPath = `inset(0 0 0 ${$('cmpRange').value}%)`; });
   $('exportIcs').addEventListener('click', exportIcs);
   $('restorePrev').addEventListener('click', restorePrev);
   $('importFile').addEventListener('change', ev => { closeDlg('dataDlg'); if (ev.target.files[0]) importFile(ev.target.files[0]); ev.target.value = ''; });

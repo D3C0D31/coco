@@ -389,3 +389,88 @@ test('Betrieb: Health, Metriken mit Token, Wiederherstellungsprobe', async () =>
   assert.throws(() => cli(t.d, 'restore.js', fs.readdirSync(path.join(t.d, 'backups')).map(f => path.join(t.d, 'backups', f))[0]), /mit --yes bestätigen|Command failed/);
   t.rm();
 });
+
+/* ---------- v9: Team-Bereich, News, geteilte Grows ---------- */
+test('Team-Bereich: Rollen, 2FA-Pflicht, News, Einstellungen, Freigaben, Meldungen, Protokoll', async (tc) => {
+  const t = await tempServer({ powBits: 0 });
+  tc.after(async () => { try { await t.close(); } catch (e) { /* schon zu */ } t.rm(); });
+  const mk = async email => {
+    const r = await fetch(t.b + '/api/register', { method: 'POST', headers: H, body: JSON.stringify({ email, password: PW, adult: true, terms: true }) });
+    const ck = { Cookie: r.headers.get('set-cookie').split(';')[0] };
+    const id = Number(/Nutzer-ID (\d+)/.exec(cli(t.d, 'admin.js', 'find', email))[1]);
+    const self = { ck, id, call: (m, u, b) => t.call(m, u, b, self.ck) };
+    return self;
+  };
+  const admin = await mk('chef@example.org'), mod = await mk('mod@example.org'), user = await mk('user@example.org');
+  assert.equal((await user.call('GET', '/api/admin/stats')).data.error, 'forbidden', 'normale Nutzer haben keinen Zugriff');
+  cli(t.d, 'admin.js', 'role', String(admin.id), 'admin'); cli(t.d, 'admin.js', 'role', String(mod.id), 'moderator');
+  cli(t.d, 'admin.js', 'name', String(admin.id), 'Chefredaktion');
+  assert.equal((await admin.call('GET', '/api/admin/stats')).data.error, 'staff_2fa', 'Team braucht Zwei-Faktor-Anmeldung');
+  const enable2fa = async who => { const s = (await who.call('POST', '/api/2fa/setup')).data; const sec = Buffer.from(s.secret.split('').map(ch => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'.indexOf(ch).toString(2).padStart(5, '0')).join('').match(/.{8}/g).map(x => parseInt(x, 2))); assert.equal((await who.call('POST', '/api/2fa/enable', { code: T.code(sec, T.currentStep()) })).status, 200); };
+  await enable2fa(admin); await enable2fa(mod);
+  const st = (await admin.call('GET', '/api/admin/stats')).data;
+  assert.equal(st.users, 3); assert.equal(st.registrations.length, 30); assert.equal(st.isAdmin, true);
+  assert.equal((await mod.call('GET', '/api/admin/stats')).data.isAdmin, false);
+
+  /* News */
+  const draft = await mod.call('POST', '/api/admin/news', { title: 'Entwurf', body: 'Noch geheim', published: false });
+  assert.equal(draft.status, 201);
+  const post = await admin.call('POST', '/api/admin/news', { title: 'Neue Version <3', body: 'Text mit <script>alert(1)</script> & **fett**', published: true, pinned: true });
+  const pubList = (await t.call('GET', '/api/news')).data;
+  assert.equal(pubList.total, 1, 'Entwürfe sind nicht öffentlich'); assert.equal(pubList.items[0].author, 'Chefredaktion'); assert.equal(pubList.items[0].pinned, true);
+  assert.equal((await t.call('GET', '/api/news/' + draft.data.id)).status, 404);
+  assert.equal((await mod.call('PUT', '/api/admin/news/' + draft.data.id, { title: 'Jetzt öffentlich', body: 'Hallo', published: true })).status, 200);
+  assert.equal((await t.call('GET', '/api/news')).data.total, 2);
+  const feed = await (await fetch(t.b + '/news/feed.xml')).text();
+  assert.match(feed, /^<\?xml/); assert.match(feed, /<title>Neue Version &lt;3<\/title>/); assert.ok(!feed.includes('<script>'), 'Feed ist korrekt maskiert');
+  assert.equal((await mod.call('DELETE', '/api/admin/news/' + post.data.id)).status, 200);
+  assert.equal((await t.call('GET', '/api/news')).data.total, 1);
+
+  /* Nutzerverwaltung */
+  assert.equal((await mod.call('POST', `/api/admin/users/${user.id}/disable`)).status, 200);
+  assert.equal((await user.call('GET', '/api/me')).status, 401, 'gesperrt durch Moderator');
+  assert.equal((await mod.call('POST', `/api/admin/users/${user.id}/enable`)).status, 200);
+  { const r = await fetch(t.b + '/api/login', { method: 'POST', headers: H, body: JSON.stringify({ email: 'user@example.org', password: PW }) }); user.ck.Cookie = r.headers.get('set-cookie').split(';')[0]; }
+  assert.equal((await mod.call('POST', `/api/admin/users/${admin.id}/disable`)).data.error, 'forbidden', 'Moderator kann Admin nicht sperren');
+  assert.equal((await mod.call('DELETE', `/api/admin/users/${user.id}`)).data.error, 'forbidden', 'Löschen nur für Admins');
+  assert.equal((await mod.call('POST', `/api/admin/users/${user.id}/role`, { role: 'admin' })).data.error, 'forbidden', 'Rollen nur für Admins');
+  const list = (await admin.call('GET', '/api/admin/users?filter=staff')).data;
+  assert.equal(list.total, 2);
+  assert.equal((await admin.call('GET', '/api/admin/users?q=USER@example.org')).data.users[0].id, user.id, 'Suche per E-Mail');
+
+  /* Einstellungen zur Laufzeit */
+  assert.equal((await mod.call('GET', '/api/admin/settings')).status, 403);
+  assert.equal((await admin.call('PUT', '/api/admin/settings', { regMode: 'quatsch' })).status, 400);
+  assert.equal((await admin.call('PUT', '/api/admin/settings', { regMode: 'closed', announcement: 'Wartung am Sonntag', sharingEnabled: true })).status, 200);
+  assert.equal((await t.call('GET', '/api/config')).data.announcement, 'Wartung am Sonntag');
+  assert.equal((await t.call('POST', '/api/register', { email: 'neu@example.org', password: PW, adult: true, terms: true })).data.error, 'closed');
+  const inv = await admin.call('POST', '/api/admin/invites', { uses: 2, days: 3, note: 'Test' });
+  assert.match(inv.data.code, /^[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+  assert.equal((await admin.call('GET', '/api/admin/invites')).data.invites[0].usesLeft, 2);
+
+  /* Geteilter Grow + Meldung + Moderation */
+  const photo = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+  const sh = await user.call('POST', '/api/shares', { title: 'Mein erster Grow', grow: { name: 'Gelato', strain: 'Gelato #41', start: '2026-09-01', evil: '<x>' }, entries: [{ date: '2026-09-02', ec: 1.2, note: 'geheim', extra: 'weg' }], photos: [{ date: '2026-09-02', data: photo }, { data: 'javascript:alert(1)' }], includeNotes: false });
+  assert.equal(sh.status, 201); assert.match(sh.data.token, /^[A-Za-z0-9_-]{22}$/);
+  const pubShare = await t.call('GET', '/api/shares/' + sh.data.token);
+  assert.equal(pubShare.status, 200);
+  assert.equal(pubShare.data.data.entries[0].note, '', 'Notizen nur auf Wunsch');
+  assert.equal(pubShare.data.data.photos.length, 1, 'ungültige Fotos werden verworfen');
+  assert.ok(!('evil' in pubShare.data.data.grow) && !('extra' in pubShare.data.data.entries[0]), 'nur erlaubte Felder');
+  assert.equal((await t.call('POST', `/api/shares/${sh.data.token}/report`, { reason: 'x' })).status, 400);
+  assert.equal((await t.call('POST', `/api/shares/${sh.data.token}/report`, { reason: 'Unangemessener Inhalt' })).status, 200);
+  const reps = (await mod.call('GET', '/api/admin/reports')).data.reports;
+  assert.equal(reps.length, 1); assert.equal(reps[0].token, sh.data.token);
+  assert.equal((await mod.call('POST', `/api/admin/shares/${sh.data.token}/hide`)).status, 200);
+  const gone = await t.call('GET', '/api/shares/' + sh.data.token);
+  assert.equal(gone.status, 404); assert.match(gone.data.message, /vom Team entfernt/);
+  assert.equal((await mod.call('GET', '/api/admin/reports')).data.reports.length, 0, 'Meldung erledigt');
+  assert.equal((await user.call('GET', '/api/shares/mine')).data.shares[0].hidden, true);
+  assert.equal((await mod.call('DELETE', '/api/shares/' + sh.data.token)).status, 404, 'fremde Freigabe nicht löschbar');
+  assert.equal((await user.call('DELETE', '/api/shares/' + sh.data.token)).status, 200);
+
+  /* Protokoll */
+  assert.equal((await mod.call('GET', '/api/admin/audit')).status, 403);
+  const au = (await admin.call('GET', '/api/admin/audit')).data.entries.map(e => e.action);
+  for (const a of ['news_publish', 'user_disable', 'settings', 'invite_create', 'share_hide']) assert.ok(au.includes(a), 'Protokoll enthält ' + a);
+});

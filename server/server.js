@@ -21,6 +21,8 @@ const CFG = {
   userQuotaMB: Number(process.env.USER_QUOTA_MB || 200),  /* Speicher pro Konto */
   metricsToken: process.env.METRICS_TOKEN || '',          /* aktiviert /api/metrics (Bearer-Token) */
   accessLog: false,
+  staffRequire2fa: process.env.STAFF_REQUIRE_2FA !== '0', /* Team-Bereich nur mit Zwei-Faktor-Anmeldung */
+  publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''), /* z. B. https://grow.example.org – für Feed-Links */
   trustProxy: process.env.TRUST_PROXY === '1',
   ipHeader: (process.env.CLIENT_IP_HEADER || '').toLowerCase(),
   sessionDays: Number(process.env.SESSION_DAYS || 30),     /* gleitend: verlängert sich bei Nutzung */
@@ -261,6 +263,8 @@ function createServer(overrides = {}) {
   const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
   const totpSecretOf = (user, dek) => (user.totp_wrapped ? C.open(dek, user.totp_wrapped, `u${user.id}:totp`) : null);
 
+  const R = require('./routes')({ db, cfg, C, json, send, err, readBody, rateOk, str, HttpError, logEvent, pepper });
+
   /* ---------- API ---------- */
   async function api(req, res, url) {
     const p = url.pathname, m = req.method, ip = clientIp(req);
@@ -269,7 +273,7 @@ function createServer(overrides = {}) {
       let dbOk = false; try { dbOk = db.prepare('SELECT 1 AS x').get().x === 1; } catch (e) { /* unten */ }
       return json(res, dbOk ? 200 : 503, { ok: dbOk, uptime: Math.round((Date.now() - METRICS.started) / 1000) });
     }
-    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, mode: cfg.regMode, pow: cfg.regMode === 'open' ? cfg.powBits : 0, version: 7 });
+    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, mode: cfg.regMode, pow: cfg.regMode === 'open' ? cfg.powBits : 0, announcement: cfg.announcement || '', sharing: cfg.sharingEnabled !== false, version: 8 });
     if (p === '/api/metrics' && m === 'GET') {
       const auth2 = String(req.headers.authorization || '');
       if (!cfg.metricsToken || !C.safeEq(Buffer.from(auth2), Buffer.from('Bearer ' + cfg.metricsToken))) throw err(404, 'not_found', 'Nicht gefunden.');
@@ -286,10 +290,11 @@ function createServer(overrides = {}) {
       return json(res, 200, { challenge: newChallenge(), bits: cfg.powBits });
     }
     if (p === '/api/session' && m === 'GET') {
-      try { const s = auth(req), u = q.userById.get(s.userId); return json(res, 200, { authenticated: true, createdAt: u.created_at, totp: !!u.totp_wrapped }); }
+      try { const s = auth(req), u = q.userById.get(s.userId); return json(res, 200, { authenticated: true, createdAt: u.created_at, totp: !!u.totp_wrapped, role: u.role || 'user' }); }
       catch (e) { if (e instanceof HttpError) return json(res, 200, { authenticated: false }); throw e; }
     }
     csrfCheck(req);
+    if (await R.pub(req, res, url, ip)) return;
 
     if (p === '/api/register' && m === 'POST') {
       if (cfg.regMode === 'closed') throw err(403, 'closed', 'Die Registrierung ist derzeit geschlossen.');
@@ -368,10 +373,11 @@ function createServer(overrides = {}) {
     /* ab hier: angemeldet */
     const s = auth(req);
     if (!rateOk('user:' + s.userId, cfg.apiPerMinute, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
+    if (await R.priv(req, res, url, s)) return;
     if (p === '/api/logout' && m === 'POST') { q.delSession.run(s.tokenHash); pendingTotp.delete(s.tokenHash); setCookie(res, req, '', 0); return json(res, 200, { ok: true }); }
     if (p === '/api/me' && m === 'GET') {
       const u = q.userById.get(s.userId);
-      return json(res, 200, { ok: true, createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n, totp: !!u.totp_wrapped, usageBytes: q.usage.get(s.userId, s.userId).b, quotaBytes: cfg.userQuotaMB * 1048576 });
+      return json(res, 200, { ok: true, role: u.role || 'user', createdAt: u.created_at, photos: q.countPhotos.get(s.userId).n, totp: !!u.totp_wrapped, usageBytes: q.usage.get(s.userId, s.userId).b, quotaBytes: cfg.userQuotaMB * 1048576 });
     }
 
     if (p === '/api/state' && m === 'GET') {
@@ -517,9 +523,9 @@ function createServer(overrides = {}) {
 
   /* ---------- Statische Dateien (nur freigegebene Liste) ---------- */
   const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
-  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'app.js', 'app.css', 'qr.js', 'pow-worker.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
+  const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'admin.html', 'admin.js', 'admin.css', 'news.html', 'news.js', 'newsfmt.js', 'share.html', 'share.js', 'app.js', 'app.css', 'qr.js', 'pow-worker.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
     'img/preview-dark.jpg', 'img/preview-light.jpg', 'img/preview-mobile.jpg', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png']);
-  const ALIASES = { '/favicon.ico': 'icons/icon-192.png', '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html', '/nutzungsbedingungen': 'nutzungsbedingungen.html' };
+  const ALIASES = { '/favicon.ico': 'icons/icon-192.png', '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html', '/nutzungsbedingungen': 'nutzungsbedingungen.html', '/admin': 'admin.html', '/news': 'news.html', '/share': 'share.html' };
   const fcache = new Map();
   function serveStatic(req, res, pathname) {
     if (!['GET', 'HEAD'].includes(req.method)) throw err(405, 'method', 'Methode nicht erlaubt.');
@@ -569,6 +575,7 @@ function createServer(overrides = {}) {
       if ((req.url || '').length > 2048) throw err(414, 'uri_too_long', 'Adresse zu lang.');
       const url = new URL(req.url, 'http://x');
       if (url.pathname.startsWith('/api/')) await api(req, res, url);
+      else if (url.pathname === '/news/feed.xml' && ['GET', 'HEAD'].includes(req.method)) R.feed(req, res, cfg.publicUrl || `${isSecure(req) ? 'https' : 'http'}://${String(req.headers.host || 'localhost').replace(/[^A-Za-z0-9.:\-\[\]]/g, '')}`);
       else { let pn; try { pn = decodeURIComponent(url.pathname); } catch (e) { throw err(400, 'bad_path', 'Ungültige Adresse.'); } serveStatic(req, res, pn); }
     } catch (e) {
       if (res.headersSent) return res.end();

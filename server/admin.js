@@ -9,6 +9,8 @@
  *   node server/admin.js disable <Nutzer-ID> | enable <Nutzer-ID> | logout <Nutzer-ID>
  *   node server/admin.js delete <Nutzer-ID> --yes
  *   node server/admin.js purge-inactive <Tage> --yes
+ *   node server/admin.js role <Nutzer-ID> admin|moderator|user
+ *   node server/admin.js name <Nutzer-ID> "Anzeigename"   (erscheint als Autor bei News)
  * Inhalte der Nutzer sind verschlüsselt und hier nicht lesbar – das ist Absicht. */
 const fs = require('fs');
 const path = require('path');
@@ -69,8 +71,8 @@ switch (args[0]) {
     const inactive = Number(flag('inactive', 0));
     const rows = db.prepare('SELECT u.*, (SELECT COUNT(*) FROM sessions s WHERE s.user_id=u.id) AS sess FROM users u ORDER BY u.id').all()
       .filter(u => !inactive || (u.last_login || u.created_at) < Date.now() - inactive * day);
-    out('ID    erstellt          letzte Anmeldung  2FA  Status    Sitzungen  Speicher');
-    rows.forEach(u => out(`${String(u.id).padEnd(5)} ${d(u.created_at)}  ${d(u.last_login).padEnd(16)}  ${u.totp_wrapped ? 'ja ' : 'nein'} ${u.disabled ? 'gesperrt' : 'aktiv   '}  ${String(u.sess).padEnd(9)}  ${kb(usage(u.id))}`));
+    out('ID    erstellt          letzte Anmeldung  2FA  Status    Rolle      Sitzungen  Speicher');
+    rows.forEach(u => out(`${String(u.id).padEnd(5)} ${d(u.created_at)}  ${d(u.last_login).padEnd(16)}  ${u.totp_wrapped ? 'ja ' : 'nein'} ${u.disabled ? 'gesperrt' : 'aktiv   '}  ${String(u.role || 'user').padEnd(9)}  ${String(u.sess).padEnd(9)}  ${kb(usage(u.id))}`));
     out(`${rows.length} Konto/Konten.`);
     break;
   }
@@ -111,7 +113,21 @@ switch (args[0]) {
     out(`${ids.length} inaktive(s) Konto/Konten gelöscht.`);
     break;
   }
+  case 'role': {
+    const u = userId(), role = String(args[2] || '');
+    if (!['admin', 'moderator', 'user'].includes(role)) fail('Rolle: admin, moderator oder user.');
+    db.prepare('UPDATE users SET role=? WHERE id=?').run(role, u.id);
+    db.prepare('INSERT INTO audit (actor_id, actor_role, action, target, at) VALUES (NULL, ?, ?, ?, ?)').run('cli', 'user_role:' + role, '#' + u.id, Date.now());
+    out(`Konto ${u.id} hat jetzt die Rolle „${role}“.${role !== 'user' ? ' Für den Team-Bereich muss das Konto die Zwei-Faktor-Anmeldung aktiviert haben.' : ''}`);
+    break;
+  }
+  case 'name': {
+    const u = userId(), name = String(args[2] || '').trim().slice(0, 40);
+    db.prepare('UPDATE users SET display_name=? WHERE id=?').run(name || null, u.id);
+    out(`Anzeigename von Konto ${u.id}: ${name || '(entfernt)'}`);
+    break;
+  }
   default:
-    out(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 14).map(l => l.replace(/^\/?\s?\*\/?\s?/, '')).join('\n'));
+    out(fs.readFileSync(__filename, 'utf8').split('\n').slice(1, 16).map(l => l.replace(/^\/?\s?\*\/?\s?/, '')).join('\n'));
 }
 db.close();

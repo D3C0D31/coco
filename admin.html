@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>Team-Bereich – AutoPot Grow</title>
+<script src="theme-init.js" data-key="autopot-theme"></script>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<header class="topbar">
+  <div class="topbar-in">
+    <h1 class="brand"><span class="logo" aria-hidden="true">🛡</span><span>Team-Bereich</span></h1>
+    <div class="actions">
+      <span class="chip mute" id="whoami"></span>
+      <a class="btn" href="app.html">← <span class="lbl">Zur App</span></a>
+    </div>
+  </div>
+  <nav class="tabs" id="adminTabs" aria-label="Team-Bereich">
+    <a href="#overview" data-tab="overview">Übersicht</a>
+    <a href="#users" data-tab="users">Nutzer</a>
+    <a href="#news" data-tab="news">News</a>
+    <a href="#reports" data-tab="reports">Meldungen <span class="badge hidden" id="repBadge"></span></a>
+    <a href="#invites" data-tab="invites" data-admin>Einladungen</a>
+    <a href="#settings" data-tab="settings" data-admin>Einstellungen</a>
+    <a href="#audit" data-tab="audit" data-admin>Protokoll</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+  <section id="gate" class="hidden"><h2>Team-Bereich</h2><div id="gateMsg"></div></section>
+
+  <section id="overview" class="tab hidden">
+    <h2>Übersicht</h2>
+    <div class="grid cards" id="kpis"></div>
+    <div class="grid charts" style="margin-top:14px">
+      <div class="card"><h3>Registrierungen (30 Tage)</h3><div id="chReg" class="bars"></div></div>
+      <div class="card"><h3>Anmeldungen (30 Tage)</h3><div id="chLog" class="bars"></div></div>
+      <div class="card"><h3>Fehlgeschlagene Anmeldungen (30 Tage)</h3><div id="chFail" class="bars bad"></div></div>
+    </div>
+    <div class="panel">
+      <h3>Dein Anzeigename</h3>
+      <p class="sub" style="margin-top:0">Erscheint als Autor deiner News-Beiträge. Leer = „Redaktion“.</p>
+      <form id="nameForm" class="row"><input id="myName" maxlength="40" style="max-width:280px" aria-label="Anzeigename"><button class="btn primary" type="submit">Speichern</button></form>
+    </div>
+  </section>
+
+  <section id="users" class="tab hidden">
+    <h2>Nutzer</h2>
+    <form id="userSearch" class="row" role="search">
+      <input id="uq" type="search" placeholder="ID oder genaue E-Mail-Adresse" style="max-width:320px" aria-label="Suche">
+      <select id="uf" style="max-width:200px" aria-label="Filter"><option value="">Alle</option><option value="staff">Team</option><option value="disabled">Gesperrt</option><option value="inactive">Inaktiv (180 Tage)</option></select>
+      <button class="btn" type="submit">Suchen</button>
+    </form>
+    <p class="sub">E-Mail-Adressen werden nicht im Klartext gespeichert – suchen geht nur mit der vollständigen Adresse. Inhalte der Nutzer sind verschlüsselt und auch hier nicht einsehbar.</p>
+    <div class="table-wrap"><table><thead><tr><th>ID</th><th>Erstellt</th><th>Letzte Anmeldung</th><th>Rolle</th><th>2FA</th><th>Status</th><th>Geräte</th><th>Freigaben</th><th>Speicher</th><th>Aktionen</th></tr></thead><tbody id="userBody"></tbody></table></div>
+    <div class="row"><button class="btn small" id="uPrev" type="button">‹ Zurück</button><span class="sub" id="uPage"></span><button class="btn small" id="uNext" type="button">Weiter ›</button></div>
+  </section>
+
+  <section id="news" class="tab hidden">
+    <h2>News</h2>
+    <div class="grid newsgrid">
+      <form id="newsForm" class="panel" style="margin:0">
+        <h3 id="newsFormTitle">Neuer Beitrag</h3>
+        <label for="nTitle">Titel</label><input id="nTitle" maxlength="140" required>
+        <label for="nBody" style="margin-top:8px">Text</label><textarea id="nBody" maxlength="20000" required rows="12"></textarea>
+        <small class="hint">**fett**, *kursiv*, ## Zwischenüberschrift, - Liste, [Linktext](https://…), Leerzeile = neuer Absatz</small>
+        <div class="row"><label class="check" style="border:0;padding:0"><input id="nPublished" type="checkbox"><span>Veröffentlichen</span></label><label class="check" style="border:0;padding:0"><input id="nPinned" type="checkbox"><span>Oben anheften</span></label></div>
+        <div class="row"><button class="btn primary" type="submit" id="nSave">Speichern</button><button class="btn" type="button" id="nReset">Neu</button></div>
+      </form>
+      <div class="panel" style="margin:0"><h3>Vorschau</h3><article id="nPreview" class="newsprev"></article></div>
+    </div>
+    <h3 style="margin-top:18px">Alle Beiträge</h3>
+    <div id="newsList"></div>
+  </section>
+
+  <section id="reports" class="tab hidden">
+    <h2>Meldungen</h2>
+    <p class="sub">Gemeldete geteilte Grows. „Ausblenden“ entfernt den Grow sofort aus der Öffentlichkeit, der Besitzer sieht den Status in seiner App.</p>
+    <div id="reportList"></div>
+  </section>
+
+  <section id="invites" class="tab hidden">
+    <h2>Einladungen</h2>
+    <form id="inviteForm" class="form">
+      <div><label for="iUses">Nutzungen</label><input id="iUses" type="number" min="1" max="1000" value="1"></div>
+      <div><label for="iDays">Gültig (Tage, 0 = unbegrenzt)</label><input id="iDays" type="number" min="0" max="365" value="14"></div>
+      <div><label for="iNote">Notiz</label><input id="iNote" maxlength="80" placeholder="z. B. für Max"></div>
+      <div style="align-self:end"><button class="btn primary" type="submit">Code erzeugen</button></div>
+    </form>
+    <div id="inviteNew"></div>
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>ID</th><th>Übrig</th><th>Erstellt</th><th>Läuft ab</th><th>Notiz</th><th></th></tr></thead><tbody id="inviteBody"></tbody></table></div>
+  </section>
+
+  <section id="settings" class="tab hidden">
+    <h2>Einstellungen</h2>
+    <form id="settingsForm" class="form">
+      <div><label for="sRegMode">Registrierung</label><select id="sRegMode"><option value="open">Offen (mit Bot-Schutz)</option><option value="invite">Nur mit Einladung</option><option value="closed">Geschlossen</option></select></div>
+      <div><label for="sMaxUsers">Höchstzahl Konten (0 = unbegrenzt)</label><input id="sMaxUsers" type="number" min="0"></div>
+      <div><label for="sDaily">Neue Konten pro 24 h (0 = unbegrenzt)</label><input id="sDaily" type="number" min="0"></div>
+      <div><label for="sQuota">Speicher pro Konto (MB)</label><input id="sQuota" type="number" min="1" max="10240"></div>
+      <div style="grid-column:1/-1"><label class="check" style="border:0;padding:0"><input id="sSharing" type="checkbox"><span>Teilen von Grows erlauben</span></label></div>
+      <div style="grid-column:1/-1"><label for="sAnnounce">Ankündigung (erscheint in App und News, leer = keine)</label><textarea id="sAnnounce" maxlength="300" rows="2"></textarea></div>
+      <div><button class="btn primary" type="submit">Speichern</button></div>
+    </form>
+    <p class="sub">Diese Werte gelten sofort und überschreiben die Umgebungsvariablen (bleiben auch nach Neustart).</p>
+  </section>
+
+  <section id="audit" class="tab hidden">
+    <h2>Team-Protokoll</h2>
+    <p class="sub">Alle Aktionen von Moderatoren und Admins. Nicht löschbar über die Oberfläche.</p>
+    <div class="table-wrap"><table><thead><tr><th>Zeit</th><th>Wer</th><th>Rolle</th><th>Aktion</th><th>Ziel</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="newsfmt.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

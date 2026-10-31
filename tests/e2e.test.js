@@ -35,7 +35,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   /* ---------- Landingpage ---------- */
   const A = await device(); const a = A.page;
   await a.goto(base + '/');
-  ok((await a.title()).includes('AutoPot Grow') && (await a.locator('#features .card').count()) === 14, 'Landingpage lädt mit 14 Funktionskarten');
+  ok((await a.title()).includes('AutoPot Grow') && (await a.locator('#features .card').count()) === 20, 'Landingpage lädt mit 20 Funktionskarten');
   ok(await a.locator('a[data-needs-reg]').first().isVisible(), 'Landingpage: Registrieren-Knopf sichtbar');
   ok((await a.locator('img.dark-only').getAttribute('src')) === 'img/preview-dark.jpg' && (await (await a.request.get(base + '/img/preview-dark.jpg')).ok()), 'Landingpage: Vorschaubild erreichbar');
   for (const p of ['/datenschutz.html', '/impressum.html']) ok((await a.request.get(base + p)).ok(), p + ' erreichbar');
@@ -100,6 +100,35 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => !(await b.textContent('#logBody')).includes('Von-Gerät-B')), 'Gerät B übernimmt die Löschung (Eintrag kehrt nicht zurück)');
   await b.fill('#fNote', 'B-nach-Löschung'); await b.fill('#fEc', '1.3'); await b.click('#saveEntry');
   ok(await waitFor(async () => { const n = (await serverHas()).notes; return n.includes('B-nach-Löschung') && !n.includes('Von-Gerät-B'); }), 'Neue Änderung von B bringt den gelöschten Eintrag nicht zurück');
+
+  /* ---------- News in der App ---------- */
+  const nowMs = Date.now();
+  srv.db.prepare('INSERT INTO news (title, body, published, pinned, author_name, created_at, updated_at, published_at) VALUES (?,?,1,0,?,?,?,?)').run('Willkommen im neuen Team-Bereich', 'Hallo **alle**!', 'Redaktion', nowMs, nowMs, nowMs);
+  await a.reload(); await a.waitForSelector('#logBody');
+  ok(await waitFor(async () => (await a.textContent('#newsBox')).includes('Willkommen im neuen Team-Bereich') && (await a.textContent('#newsDot')) === '1'), 'News: Vorschau in der App mit Ungelesen-Zähler');
+  const np = await A.ctx.newPage();
+  await np.goto(base + '/news.html');
+  ok(await waitFor(async () => (await np.locator('article.post strong').first().textContent()) === 'alle'), 'News-Seite zeigt formatierten Beitrag');
+  await np.close();
+  await a.reload(); await a.waitForSelector('#logBody');
+  ok(await waitFor(async () => a.evaluate(() => document.getElementById('newsDot').classList.contains('hidden'))), 'News: nach dem Lesen kein Ungelesen-Zähler mehr');
+
+  /* ---------- Grow teilen ---------- */
+  await a.click('#shareBtn');
+  await a.waitForSelector('#shareDlg[open]');
+  await a.click('#shCreate');
+  ok((await a.textContent('#toast')).includes('öffentlich sichtbar'), 'Teilen: ohne Einverständnis nicht möglich');
+  await a.check('#shConsent'); await a.click('#shCreate');
+  await a.waitForSelector('#shLink');
+  const shareLink = await a.inputValue('#shLink');
+  ok(/\/share\.html#[A-Za-z0-9_-]{22}$/.test(shareLink) && (await a.locator('#shList .item').count()) === 1, 'Teilen: Link erzeugt und in „Meine Freigaben“');
+  await a.keyboard.press('Escape');
+  const sp = await (await browser.newContext()).newPage();
+  await sp.goto(shareLink);
+  ok(await waitFor(async () => (await sp.textContent('h1')).length > 0 && (await sp.locator('.card.chart').count()) >= 1 && (await sp.locator('.photos img').count()) === 1), 'Geteilter Grow: öffentlich sichtbar mit Diagrammen und Foto (ohne Anmeldung)');
+  ok(!(await sp.textContent('body')).includes('Cloud-Test-Notiz-8812'), 'Geteilter Grow: Notizen nur auf Wunsch');
+  await sp.click('#reportBox summary'); await sp.fill('#reportReason', 'Test-Meldung: unpassend'); await sp.click('#reportForm button[type=submit]');
+  ok(await waitFor(async () => (await sp.textContent('#reportMsg')).includes('Danke')), 'Geteilter Grow: Melden funktioniert');
 
   /* ---------- Geräte und Sicherheitsprotokoll ---------- */
   await a.click('#accountBtn'); await a.click('#acctIn summary:has-text("Angemeldete Geräte")');
@@ -176,6 +205,29 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => (await d.textContent('#acctMsg')).includes('falsch oder abgelaufen')), '2FA: bereits benutzter Code wird abgelehnt');
   await d.fill('#liTotp', T.code(secret, step + 1)); await d.click('#loginForm button[type=submit]');
   ok(await waitFor(async () => d.evaluate(async () => (await (await fetch('/api/session')).json()).authenticated)), '2FA: Login mit neuem Code erfolgreich');
+
+  /* ---------- Team-Bereich (Moderator mit 2FA) ---------- */
+  await sp.reload();
+  ok(await waitFor(async () => (await sp.textContent('#shareOut')).includes('Nicht verfügbar')), 'Geteilter Grow verschwindet mit dem gelöschten Konto');
+  const dTok = await d.evaluate(async () => { const H = { 'Content-Type': 'application/json', 'X-Requested-With': 'autopot' }; const r = await (await fetch('/api/shares', { method: 'POST', headers: H, body: JSON.stringify({ title: 'D-Grow', grow: { name: 'D' }, entries: [{ date: '2026-10-01', ec: 1.1 }] }) })).json(); await fetch('/api/shares/' + r.token + '/report', { method: 'POST', headers: H, body: JSON.stringify({ reason: 'Test-Meldung: unpassend' }) }); return r.token; });
+  await sp.goto(base + '/share.html#' + dTok);
+  srv.db.prepare("UPDATE users SET role='moderator' WHERE email_hash=(SELECT email_hash FROM users ORDER BY id DESC LIMIT 1)").run();
+  await d.reload(); await d.waitForSelector('#logBody');
+  ok(await waitFor(async () => d.locator('#teamBtn').isVisible()), 'Team: Knopf für Moderatoren sichtbar');
+  await d.goto(base + '/admin.html#reports');
+  ok(await waitFor(async () => (await d.textContent('#reportList')).includes('Test-Meldung: unpassend')), 'Team: Meldung erscheint im Panel');
+  ok(!(await d.locator('#adminTabs [data-tab="settings"]').isVisible()), 'Team: Moderator sieht keine Admin-Einstellungen');
+  await d.click('#reportList [data-r="hide"]');
+  ok(await waitFor(async () => (await d.textContent('#reportList')).includes('Keine offenen Meldungen')), 'Team: Grow ausgeblendet, Meldung erledigt');
+  await sp.reload();
+  ok(await waitFor(async () => (await sp.textContent('#shareOut')).includes('vom Team entfernt')), 'Geteilter Grow: nach Moderation nicht mehr öffentlich');
+  await d.goto(base + '/admin.html#overview');
+  ok(await waitFor(async () => (await d.locator('#kpis .card').count()) >= 10), 'Team: Übersicht mit Kennzahlen');
+  await d.goto(base + '/admin.html#news');
+  await d.fill('#nTitle', 'Moderator-Beitrag'); await d.fill('#nBody', 'Text **fett**'); await d.check('#nPublished');
+  ok((await d.innerHTML('#nPreview')).includes('<strong>fett</strong>'), 'Team: News-Vorschau rendert Formatierung');
+  await d.click('#nSave');
+  ok(await waitFor(async () => (await d.textContent('#newsList')).includes('Moderator-Beitrag')), 'Team: News veröffentlicht');
   await D.ctx.close();
 
   /* Einladungsmodus: Feld für den Code erscheint */

@@ -21,19 +21,22 @@
       <button class="btn primary hidden" id="installBtn" type="button">⬇ <span class="lbl">Installieren</span></button>
       <a class="btn" href="anleitung.html" aria-label="Anleitung">📖 <span class="lbl">Anleitung</span></a>
       <button class="btn" id="themeToggle" type="button">🌗 System</button>
+      <a class="btn hidden" id="newsLink" href="news.html" aria-label="News">📰 <span class="lbl">News</span><span class="dot hidden" id="newsDot"></span></a>
+      <a class="btn hidden" id="teamBtn" href="admin.html" aria-label="Team-Bereich">🛡 <span class="lbl">Team</span></a>
       <button class="btn hidden" id="accountBtn" type="button" aria-haspopup="dialog"><i class="sync-dot off" id="syncDot" aria-hidden="true"></i> <span class="lbl">Konto</span></button>
       <button class="btn" id="dataBtn" type="button" aria-haspopup="dialog">💾 <span class="lbl">Daten</span></button>
     </div>
   </div>
   <nav class="tabs" aria-label="Bereiche">
     <a href="#dashboard">Übersicht</a><a href="#log">Protokoll</a><a href="#charts">Diagramme</a><a href="#gallery">Galerie</a>
-    <a href="#calc">Rechner</a><a href="#wissen">Wissen</a><a href="#harvest">Ernte</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
+    <a href="#calc">Rechner</a><a href="#plan">Fahrplan</a><a href="#wissen">Wissen</a><a href="#strains">Sorten</a><a href="#harvest">Ernte</a><a href="#recipes">Rezepte</a><a href="#timeline">Timeline</a>
     <a href="#reminders">Erinnerungen</a><a href="#diagnose">Diagnose</a><a href="#checks">Checklisten</a>
   </nav>
 </header>
 
 <main id="main" tabindex="-1">
 <section id="dashboard" class="plain">
+  <div id="announceBox"></div>
   <div class="hero">
     <div>
       <p class="eyebrow" id="heroEyebrow">Dein Grow</p>
@@ -61,6 +64,7 @@
 
   <div id="findings"></div>
   <div id="tipBox"></div>
+  <div class="panel today" style="background:var(--glass)"><h3>🗓 Heute</h3><ul id="todayList" class="todaylist"></ul></div>
   <div class="grid cards">
     <div class="card" id="cardPh"><h3>Tank-pH</h3><div class="value" id="kPh">–</div><p class="sub" id="kPhSub"></p><div id="gPh"></div><div id="spPh"></div></div>
     <div class="card" id="cardEc"><h3>Tank-EC</h3><div class="value" id="kEc">–</div><p class="sub" id="kEcSub"></p><div id="gEc"></div><div id="spEc"></div></div>
@@ -69,6 +73,7 @@
     <div class="card"><h3>Letzter Eintrag</h3><div class="value" id="kLast">–</div><p class="sub" id="kLastSub"></p></div>
     <div class="card"><h3>Montage / Woche</h3><div class="value" id="kChecks">–</div><p class="sub">erledigte Checklistenpunkte</p></div>
   </div>
+  <div id="newsBox"></div>
   <div class="panel" style="background:var(--glass)">
     <h3>📊 Wochenbericht <span class="sub">(letzte 7 Tage im Vergleich zur Vorwoche)</span></h3>
     <div id="weekly"></div>
@@ -168,7 +173,8 @@
 </section>
 
 <section id="gallery">
-  <h2>Foto-Galerie</h2>
+  <div class="head"><h2>Foto-Galerie</h2><button class="btn small" id="cmpBtn" type="button">↔ Vorher/Nachher</button></div>
+  <p class="notice hidden" id="cmpHint">Tippe zwei Fotos an, die du vergleichen möchtest.</p>
   <div id="galleryGrid" class="gallery"></div>
   <p class="sub" id="galleryEmpty">Noch keine Fotos. Beim Eintragen ein Foto anhängen, dann entsteht hier dein Wachstums-Zeitraffer.</p>
 </section>
@@ -233,6 +239,12 @@
   </div>
 </section>
 
+<section id="plan">
+  <h2>Grow-Fahrplan</h2>
+  <p class="sub" id="planNote" style="margin-top:0"></p>
+  <div class="table-wrap"><table class="mini ref"><thead><tr><th>Woche</th><th>Zeitraum</th><th>Phase</th><th>Licht</th><th>Tank-EC</th><th>VPD (kPa)</th><th>Luft</th><th>rF</th><th>PPFD</th></tr></thead><tbody id="planBody"></tbody></table></div>
+</section>
+
 <section id="wissen">
   <h2>Wissen</h2>
   <h3>Richtwerte je Phase <span class="sub">(aus der Anleitung, Kap. 7, 9 und 10 – aktuelle Phase hervorgehoben)</span></h3>
@@ -243,6 +255,19 @@
   <div id="nutriList" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))"></div>
   <h3 style="margin-top:20px">Glossar</h3>
   <dl id="glossar" class="glossar"></dl>
+</section>
+
+<section id="strains">
+  <h2>Sortenbibliothek</h2>
+  <div class="form">
+    <div><label for="stName">Sorte</label><input id="stName" maxlength="60" placeholder="z. B. Gelato #41"></div>
+    <div><label for="stBreeder">Züchter/Samenbank</label><input id="stBreeder" maxlength="60"></div>
+    <div><label for="stType">Typ</label><select id="stType"><option value="photo">Photoperiodisch</option><option value="auto">Autoflower</option><option value="unknown">unbekannt</option></select></div>
+    <div><label for="stWeeks">Blütedauer (Wochen)</label><input id="stWeeks" type="number" min="4" max="20" value="9"></div>
+    <div style="grid-column:1/-1"><label for="stNotes">Notizen (Geschmack, Wuchs, Erfahrungen)</label><input id="stNotes" maxlength="300"></div>
+  </div>
+  <div class="row"><button class="btn primary" id="stSave" type="button">Sorte speichern</button></div>
+  <div id="strainList"></div>
 </section>
 
 <section id="harvest">
@@ -258,6 +283,7 @@
   <div class="row no-print">
     <button id="newGrow" class="btn" type="button">🏁 Grow abschließen &amp; neu starten</button>
     <button id="printBtn" class="btn" type="button">🖨 Bericht drucken</button>
+    <button id="shareBtn" class="btn" type="button">🔗 Grow teilen</button>
   </div>
   <small class="hint">„Abschließen“ lädt zuerst ein Backup herunter, legt den Grow im Archiv ab und beginnt mit leerem Protokoll (Rezepte und Erinnerungen bleiben). Über „Letzten Import rückgängig machen“ holst du den Stand zurück.</small>
   <h3 style="margin-top:16px">Archiv</h3>
@@ -348,6 +374,7 @@
     <button class="btn block" id="backupJson" type="button">💾 Backup (JSON, mit Fotos)</button>
     <button class="btn block" id="exportCsv" type="button">📊 CSV exportieren</button>
     <label class="btn block" for="importFile" style="margin:0">📥 Import (JSON oder CSV)<input id="importFile" type="file" accept=".json,.csv,application/json,text/csv" class="hidden"></label>
+    <label class="btn block" for="climateFile" style="margin:0">🌡 Klimadaten importieren (Hygrometer-CSV)<input id="climateFile" type="file" accept=".csv,text/csv" class="hidden"></label>
     <button class="btn block" id="printBtn2" type="button">🖨 Bericht drucken</button>
     <small class="hint">Alles liegt nur in diesem Browser. Regelmäßig ein Backup speichern.</small>
   </div>
@@ -462,6 +489,28 @@
     </div>
   </div>
 </dialog>
+<dialog id="shareDlg" aria-labelledby="shTitleH">
+  <div class="dh"><h3 id="shTitleH">Grow teilen</h3><button class="btn small" type="button" data-close="shareDlg" aria-label="Schließen">✕</button></div>
+  <div class="db">
+    <p class="sub" style="margin:0">Erzeugt eine öffentliche Momentaufnahme mit Messwerten und Diagrammen. Wer den Link kennt, kann sie ansehen. Deine übrigen Daten bleiben verschlüsselt.</p>
+    <label for="shTitle">Titel</label><input id="shTitle" maxlength="80">
+    <label class="check" style="border:0;padding:0"><input id="shPhotos" type="checkbox" checked><span>Bis zu 12 neueste Fotos einbeziehen</span></label>
+    <label class="check" style="border:0;padding:0"><input id="shNotes" type="checkbox"><span>Notizen einbeziehen</span></label>
+    <label class="check" style="border:0;padding:0"><input id="shConsent" type="checkbox"><span>Ich bin einverstanden, dass dieser Grow öffentlich sichtbar ist, und habe die Rechte an den Fotos.</span></label>
+    <button class="btn primary" id="shCreate" type="button">Link erstellen</button>
+    <div id="shResult"></div>
+    <h3 style="margin:10px 0 0">Meine Freigaben</h3>
+    <div id="shList"></div>
+  </div>
+</dialog>
+<dialog id="cmpDlg" aria-labelledby="cmpTitle">
+  <div class="dh"><h3 id="cmpTitle">Vorher / Nachher</h3><button class="btn small" type="button" data-close="cmpDlg" aria-label="Schließen">✕</button></div>
+  <div class="db">
+    <div class="cmpwrap"><img id="cmpA" alt="Vorher"><img id="cmpB" class="top" alt="Nachher"></div>
+    <input id="cmpRange" type="range" min="0" max="100" value="50" aria-label="Trennlinie verschieben">
+    <div class="row" style="justify-content:space-between;margin:0"><span class="sub" id="cmpCapA"></span><span class="sub" id="cmpCapB"></span></div>
+  </div>
+</dialog>
 <dialog id="pwAsk" aria-labelledby="pwAskTitle">
   <div class="dh"><h3 id="pwAskTitle">Passwort</h3></div>
   <form class="db" id="pwAskForm">
@@ -473,7 +522,7 @@
 <dialog id="moreSheet" aria-labelledby="moreTitle">
   <div class="dh"><h3 id="moreTitle">Alle Bereiche</h3><button class="btn small" type="button" data-close="moreSheet" aria-label="Schließen">✕</button></div>
   <div class="db"><div class="sheetgrid">
-    <a href="#gallery"><b>🖼</b>Galerie</a><a href="#wissen"><b>📚</b>Wissen</a><a href="#harvest"><b>🌾</b>Ernte</a><a href="#recipes"><b>🧪</b>Rezepte</a>
+    <a href="#gallery"><b>🖼</b>Galerie</a><a href="#wissen"><b>📚</b>Wissen</a><a href="#plan"><b>📅</b>Fahrplan</a><a href="#strains"><b>🌿</b>Sorten</a><a href="news.html"><b>📰</b>News</a><a href="#harvest"><b>🌾</b>Ernte</a><a href="#recipes"><b>🧪</b>Rezepte</a>
     <a href="#timeline"><b>🗓</b>Timeline</a><a href="#reminders"><b>⏰</b>Erinnerungen</a><a href="#diagnose"><b>🩺</b>Diagnose</a>
     <a href="#checks"><b>✅</b>Checklisten</a><a href="anleitung.html"><b>📖</b>Anleitung</a><a href="#" data-open="dataDlg"><b>💾</b>Daten</a><a href="#" data-open="accountDlg"><b>👤</b>Konto</a>
   </div></div>
@@ -486,6 +535,7 @@
 <div id="tip" class="hidden" role="tooltip"></div>
 
 <script src="qr.js"></script>
+<script src="newsfmt.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

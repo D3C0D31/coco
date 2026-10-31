@@ -113,3 +113,41 @@ footer{padding:40px 0 60px;color:var(--muted);font-size:14px;border-top:1px soli
 .legal{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
 .legal h1{font-size:clamp(26px,7vw,44px)}
 h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
+/* News */
+.newsmain{max-width:800px;padding-top:40px;padding-bottom:80px}
+.newshead{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+.newshead h1{margin:0}
+.post{margin-bottom:16px}
+.post:hover{transform:none}
+.post h2{margin:4px 0 2px;font-size:24px;letter-spacing:-.02em}
+.post .meta{margin:0 0 10px;color:var(--muted);font-size:13px}
+.post .pin{color:var(--green);font-size:12px;font-weight:800}
+.postbody{overflow-wrap:break-word}
+.postbody p,.postbody li{color:var(--text)}
+.postbody h3{margin:16px 0 6px}
+.postbody code{padding:1px 6px;background:var(--surface2);border-radius:6px}
+/* Geteilter Grow */
+.sharemain{padding-top:40px;padding-bottom:80px}
+h2.title.small{margin-top:30px;font-size:24px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr))}
+.kpis .card{padding:16px}.kpis .card:hover{transform:none}
+.kpis b{font-size:22px}
+.kpis .sub{margin:0;font-size:13px}
+.grid.charts{grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))}
+.card.chart{padding:16px}.card.chart:hover{transform:none}
+.card.chart h3{display:flex;justify-content:space-between;margin:0 0 6px;font-size:15px}
+.card.chart svg{display:block;width:100%;height:auto}
+.card.chart .line{fill:none;stroke:var(--green);stroke-width:2.5;stroke-linejoin:round}
+.card.chart .area{fill:var(--green);opacity:.12}
+.card.chart circle{fill:var(--green)}
+.card.chart .sub{margin:4px 0 0;font-size:12px}
+.photos{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(min(160px,100%),1fr))}
+.photos figure{margin:0}.photos img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border-radius:14px}
+.photos figcaption{margin-top:4px;color:var(--muted);font-size:12px}
+.tablewrap{overflow:auto;border:1px solid var(--border);border-radius:14px}
+.tablewrap table{width:100%;min-width:640px;border-collapse:collapse;font-size:14px}
+.tablewrap th,.tablewrap td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+.tablewrap th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em;background:var(--surface2)}
+.reportform{display:grid;gap:8px;margin-top:10px}
+.reportform textarea{min-height:80px;padding:10px;color:var(--text);font:inherit;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+#reportBox{margin-top:30px}

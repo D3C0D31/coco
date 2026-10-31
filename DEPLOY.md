@@ -28,6 +28,7 @@ docker compose exec app node server/admin.js stats
 ```
 
 1. Eigenes Konto anlegen, **Zwei-Faktor-Anmeldung aktivieren**, Wiederherstellungscode sicher ablegen.
+   Dann dich selbst zum Admin machen: `docker compose exec app node server/admin.js find deine@mail.de` → `… role <ID> admin` → Team-Bereich unter `https://DOMAIN/admin`.
 2. Weitere Personen per Einladungscode einladen (`invite create --uses 5 --days 7`).
 3. Erst wenn alles läuft und die Rechtstexte stehen, bei Bedarf `REGISTRATION=open` (dann schützt die Rechenaufgabe POW_BITS vor Bots, zusätzlich `REG_DAILY_MAX` und `MAX_USERS` setzen).
 

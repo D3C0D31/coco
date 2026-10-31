@@ -7,6 +7,9 @@ Grow-Tagebuch für passive AutoPot-Systeme (AirBase + AirDome, 50/50 Coco/Perlit
 | `/` (`index.html`) | Landingpage mit Funktionen, Sicherheit, FAQ, Registrieren/Anmelden |
 | `/app` (`app.html`) | Die Grow-App (läuft auch ohne Konto, dann nur lokal im Browser) |
 | `/anleitung` (`anleitung.html`) | Meisteranleitung mit 20 Kapiteln, druckfreundlich |
+| `/news` (`news.html`) | Öffentliche News mit Atom-Feed (`/news/feed.xml`) |
+| `/share.html#…` | Öffentlich geteilter Grow (Momentaufnahme, mit Melde-Funktion) |
+| `/admin` (`admin.html`) | Team-Bereich für Moderatoren und Admins (nur mit Zwei-Faktor-Anmeldung) |
 | `/datenschutz`, `/impressum`, `/nutzungsbedingungen` | **Vorlagen** – vor dem Livegang ausfüllen und rechtlich prüfen lassen |
 
 **Zum Online-Stellen bitte [DEPLOY.md](DEPLOY.md) lesen** (Docker Compose + Caddy, Cloudflare, Sicherungen, Überwachung, Checkliste). Sicherheitskonzept und Grenzen: [SECURITY.md](SECURITY.md).
@@ -35,6 +38,8 @@ Daten landen in `server-data/` (SQLite-Datenbank + Server-Geheimnis). Diesen Ord
 | `CLIENT_IP_HEADER` | – | Nur hinter Cloudflare: `cf-connecting-ip` (siehe DEPLOY.md) |
 | `METRICS_TOKEN` | – | Aktiviert `/api/metrics` (Prometheus) mit `Authorization: Bearer …` |
 | `LOG` | `on` | Zugriffsprotokoll ohne IP-Adressen auf stdout |
+| `PUBLIC_URL` | – | Öffentliche Adresse für Links im News-Feed |
+| `STAFF_REQUIRE_2FA` | `1` | Team-Bereich nur mit Zwei-Faktor-Anmeldung |
 | `TRUST_PROXY` | `0` | `1` hinter einem Reverse-Proxy mit HTTPS (Render, Fly, Caddy, nginx). Nötig für `Secure`-Cookies und korrekte IP-Begrenzung |
 | `SESSION_DAYS` | `30` | Laufzeit einer Anmeldung ab der letzten Nutzung |
 | `SESSION_MAX_DAYS` | `90` | Höchstdauer einer Anmeldung, danach immer neu anmelden |
@@ -61,9 +66,19 @@ npm run backup                    # konsistente Kopie nach server-data/backups/,
 
 Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. `npm run restore-test` startet einen Server auf der neuesten Sicherung und prüft ihn (Wiederherstellungsprobe); `node server/restore.js <Datei> --yes` stellt wirklich wieder her.
 
-### Verwaltung
+### Team-Bereich (Admin-/Moderations-Panel)
 
-`npm run admin -- stats` · `invite create --uses 3 --days 7` · `users` · `find <email>` · `disable <ID>` · `delete <ID> --yes` · `purge-inactive 730 --yes` – Übersicht in DEPLOY.md, Abschnitt 7. Inhalte der Nutzer sind auch hier nicht lesbar. Die Sicherung ist genauso verschlüsselt wie die Datenbank; zum Anmelden wird zusätzlich `server-secret.key` bzw. `AUTOPOT_SECRET` gebraucht – getrennt aufbewahren. Per Cron z. B. täglich: `0 3 * * * cd /app && npm run backup`.
+Ersten Admin auf dem Server festlegen: Konto in der App anlegen, Zwei-Faktor-Anmeldung aktivieren, dann `npm run admin -- find deine@mail.de` und `npm run admin -- role <ID> admin` (optional `name <ID> "Redaktion"`). Danach unter `/admin`:
+
+- **Übersicht:** Kennzahlen und 30-Tage-Diagramme (Registrierungen, Anmeldungen, Fehlversuche)
+- **Nutzer:** Suche per ID oder vollständiger E-Mail, Filter (Team, gesperrt, inaktiv), sperren/entsperren, überall abmelden, Rolle ändern und löschen (nur Admin)
+- **News:** Beiträge mit Vorschau, Entwürfen und Anheften
+- **Meldungen:** gemeldete geteilte Grows ansehen, ausblenden, verwerfen, löschen
+- **Einladungen, Einstellungen** (Registrierungsmodus, Limits, Speicher, Teilen an/aus, Ankündigung – sofort wirksam), **Team-Protokoll** (nur Admin)
+
+### Verwaltung auf der Kommandozeile
+
+`npm run admin -- stats` · `invite create --uses 3 --days 7` · `users` · `find <email>` · `disable <ID>` · `delete <ID> --yes` · `purge-inactive 730 --yes` · `role <ID> admin|moderator|user` · `name <ID> "Anzeigename"` – Übersicht in DEPLOY.md, Abschnitt 7. Inhalte der Nutzer sind auch hier nicht lesbar. Die Sicherung ist genauso verschlüsselt wie die Datenbank; zum Anmelden wird zusätzlich `server-secret.key` bzw. `AUTOPOT_SECRET` gebraucht – getrennt aufbewahren. Per Cron z. B. täglich: `0 3 * * * cd /app && npm run backup`.
 
 ## Sicherheit
 
@@ -96,20 +111,21 @@ Läuft im Betrieb (`VACUUM INTO`), behält die letzten 14 Sicherungen. `npm run 
 
 ## API (kurz)
 
-`POST /api/register | /api/login (optional `totp`) | /api/recover | /api/logout | /api/password`, `POST /api/2fa/setup | /api/2fa/enable | /api/2fa/disable`, `GET /api/sessions`, `DELETE /api/sessions/:id | /api/sessions/others`, `GET /api/security-log`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `POST /api/recovery-code`, `GET /api/challenge` (Bot-Schutz), `DELETE /api/account`, `GET /api/health | /api/config | /api/metrics`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
+`POST /api/register | /api/login (optional `totp`) | /api/recover | /api/logout | /api/password`, `POST /api/2fa/setup | /api/2fa/enable | /api/2fa/disable`, `GET /api/sessions`, `DELETE /api/sessions/:id | /api/sessions/others`, `GET /api/security-log`, `GET /api/session | /api/me | /api/export`, `GET/PUT /api/state` (mit `baseVersion`, 409 bei Konflikt), `GET /api/photos`, `GET/PUT/DELETE /api/photos/:id`, `GET /api/news`, `GET /api/news/:id`, `POST/GET/DELETE /api/shares…` (teilen, öffentlich lesen, melden), `/api/admin/*` (Team-Bereich), `POST /api/recovery-code`, `GET /api/challenge` (Bot-Schutz), `DELETE /api/account`, `GET /api/health | /api/config | /api/metrics`. Alle schreibenden Anfragen brauchen `X-Requested-With: autopot`.
 
 ## Funktionen der App
 
-Übersicht mit Tageszähler, Phasenleiste, Grow-Score, Messserie, **Ernteprognose** (Blütewoche, voraussichtlicher Erntetermin) und **Tipp passend zur Phase** · **Wochenbericht** (Ø-Werte mit Trend zur Vorwoche, Zuwachs, Zielquote) · „Letzte Werte übernehmen“ beim Eintragen, Löschen mit **Rückgängig** · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, **Stromkosten**, VPD-Heatmap) · **Wissen**: Richtwerte-Tabelle je Phase, Nährstoff-Lexikon (mobil/immobil, Anzeichen, Ursachen), Glossar · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos, optional passwortverschlüsselt), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
+**Heute-Karte** (Messung fällig, Erinnerungen, Tank, Fahrplan-Woche) · **News-Vorschau** mit Ungelesen-Zähler und Ankündigungen · Übersicht mit Tageszähler, Phasenleiste, Grow-Score, Messserie, **Ernteprognose** (Blütewoche, voraussichtlicher Erntetermin) und **Tipp passend zur Phase** · **Wochenbericht** (Ø-Werte mit Trend zur Vorwoche, Zuwachs, Zielquote) · „Letzte Werte übernehmen“ beim Eintragen, Löschen mit **Rückgängig** · Messprotokoll mit Höhe, Schnell-Tags, Suche und Filtern · Diagramme mit Zielband und Zeitraum · Foto-Galerie · Rechner (VPD, EC/Dünger, pH, Mischung, Tank, EC⇄PPM, DLI, **Stromkosten**, VPD-Heatmap) · **Grow-Fahrplan** (Woche für Woche: Phase, Licht, Zielwerte) · **Sortenbibliothek** (Typ, Züchter, Blütedauer → Prognose) · **Trendwarnungen** (pH-Drift, Salzaufbau, warmes Wasser, Schimmelgefahr) · **Hygrometer-CSV-Import** (Govee, Inkbird …, °F werden umgerechnet) · **Vorher/Nachher-Vergleich** mit Schieberegler · **Grow teilen** per Link · **Wissen**: Richtwerte-Tabelle je Phase, Nährstoff-Lexikon (mobil/immobil, Anzeichen, Ursachen), Glossar · Tankwechsel-Assistent · Ernte & Archiv · Rezepte, Timeline, Erinnerungen (mit .ics-Export), Diagnose, Checklisten · JSON-Backup (mit Fotos, optional passwortverschlüsselt), CSV-Export/-Import · Dunkelmodus · installierbar und offline nutzbar.
 
-### Datenformat (Schema v6)
+### Datenformat (Schema v7)
 
 ```
-{ version, settings{name, phase, startDate, phaseStart, flowerStart, flowerWeeks, lightHours, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
+{ version, settings{name, phase, strainId, startDate, phaseStart, flowerStart, flowerWeeks, lightHours, tankSize, tankRest, dailyUse, tankInterval, lastTankChange, lastBackup, entriesSinceBackup},
   entries[{id, date, phase, ec, ph, waterTemp, airTemp, humidity, ppfd, use, height, tags, note, hasPhoto}],
   recipes[], events[], reminders[], checks{setup{}, week{}},
   harvest{date, wet, dry, watt, note}, archive[{id, name, start, end, entries, days, wet, dry, watt, avgEc, avgPh}],
-  deleted{entries{}, recipes{}, events{}, reminders{}, archive{}} }   // Löschmarker: id → Zeitpunkt
+  strains[{id, name, breeder, type, flowerWeeks, notes}],
+  deleted{entries{}, recipes{}, events{}, reminders{}, archive{}, strains{}} }   // Löschmarker: id → Zeitpunkt
 ```
 
 Backups älterer Versionen werden beim Import ergänzt. `data/autopot-grow-backup.json` enthält den bisherigen Datenstand zum Import.
@@ -121,9 +137,9 @@ npm install            # nur für die Browser-Tests (Playwright)
 npm test               # Server-Tests, App-Tests, End-to-End mit zwei Geräten
 ```
 
-- `tests/server.test.js` (20 Testgruppen) – Bot-Schutz, Altersbestätigung, Einladungen, Verwaltungswerkzeug, Kontingent, gesperrte Konten, dauerhafte Sperren, Metriken, Wiederherstellungsprobe, Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
-- `tests/smoke.test.js` (110) – Überlauf-Prüfung bis 320 px, Eingabeprüfung, App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
-- `tests/e2e.test.js` (45) – Abmelden offline, Altbestände, Löschungen über Geräte hinweg, Einladungsmodus, Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
+- `tests/server.test.js` (21 Testgruppen) – Team-Bereich mit Rollen und 2FA-Pflicht, News inkl. Feed, Freigaben und Meldungen, Bot-Schutz, Altersbestätigung, Einladungen, Verwaltungswerkzeug, Kontingent, gesperrte Konten, dauerhafte Sperren, Metriken, Wiederherstellungsprobe, Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
+- `tests/smoke.test.js` (123) – Sorten, Fahrplan, Heute-Karte, Trends, Hygrometer-Import, Vorher/Nachher, Überlauf-Prüfung bis 320 px, Eingabeprüfung, App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
+- `tests/e2e.test.js` (62) – News in der App, Grow teilen und melden, Moderation im Panel, Abmelden offline, Altbestände, Löschungen über Geräte hinweg, Einladungsmodus, Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
 
 - `tests/load.js` – Lasttest (`npm run test:load`). Ergebnis auf 2 CPU-Kernen: ~1 500 Anfragen/s an die Daten-API (p95 56 ms, keine Fehler), 40 gleichzeitige Logins in 1,3 s, ~265 MB RAM.
 

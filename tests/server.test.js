@@ -378,6 +378,7 @@ test('Betrieb: Health, Metriken mit Token, Wiederherstellungsprobe', async () =>
   const t = await tempServer({ powBits: 0, metricsToken: 'geheimes-metrik-token' });
   const h = await t.call('GET', '/api/health');
   assert.equal(h.status, 200); assert.equal(h.data.ok, true);
+  assert.equal(h.data.release, require('../package.json').version, 'Health meldet die Release-Version');
   assert.equal((await fetch(t.b + '/api/metrics')).status, 404, 'ohne Token unsichtbar');
   assert.equal((await fetch(t.b + '/api/metrics', { headers: { Authorization: 'Bearer falsch' } })).status, 404);
   await t.call('POST', '/api/register', { email: 'm@example.org', password: PW, adult: true, terms: true });

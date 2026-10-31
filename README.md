@@ -2,6 +2,8 @@
 
 Grow-Tagebuch für passive AutoPot-Systeme (AirBase + AirDome, 50/50 Coco/Perlite, mineralische Nährlösung) – als Website mit Benutzerkonten und verschlüsselter Cloud-Synchronisation, installierbar als App auf Handy und Rechner.
 
+**Version 1.0.0-rc.1** (Release Candidate, für den Testlauf im Einladungsmodus) – Änderungen und bekannte Grenzen: [CHANGELOG.md](CHANGELOG.md).
+
 | Seite | Zweck |
 |---|---|
 | `/` (`index.html`) | Landingpage mit Funktionen, Sicherheit, FAQ, Registrieren/Anmelden |

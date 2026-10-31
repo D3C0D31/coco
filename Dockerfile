@@ -9,6 +9,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 # Nur die öffentlich ausgelieferten Dateien und den Server kopieren
 COPY server ./server
+COPY package.json ./
 COPY index.html app.html anleitung.html datenschutz.html impressum.html nutzungsbedingungen.html news.html share.html admin.html robots.txt \
      app.css qr.js pow-worker.js anleitung.js theme-init.js site.css site.js sw.js manifest.webmanifest \
      news.js newsfmt.js share.js admin.js admin.css ./

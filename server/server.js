@@ -10,6 +10,7 @@ const T = require('./totp');
 const { openDb, loadPepper } = require('./db');
 
 const ROOT = path.join(__dirname, '..');
+const RELEASE = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch (e) { return 'unbekannt'; } })();
 const CFG = {
   port: Number(process.env.PORT || 8080),
   host: process.env.HOST || '0.0.0.0',
@@ -271,9 +272,9 @@ function createServer(overrides = {}) {
     if (!rateOk('api:' + ip, cfg.apiPerMinute, 60e3)) throw err(429, 'rate_limited', 'Zu viele Anfragen. Bitte kurz warten.');
     if (p === '/api/health' && m === 'GET') {
       let dbOk = false; try { dbOk = db.prepare('SELECT 1 AS x').get().x === 1; } catch (e) { /* unten */ }
-      return json(res, dbOk ? 200 : 503, { ok: dbOk, uptime: Math.round((Date.now() - METRICS.started) / 1000) });
+      return json(res, dbOk ? 200 : 503, { ok: dbOk, release: RELEASE, uptime: Math.round((Date.now() - METRICS.started) / 1000) });
     }
-    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, mode: cfg.regMode, pow: cfg.regMode === 'open' ? cfg.powBits : 0, announcement: cfg.announcement || '', sharing: cfg.sharingEnabled !== false, version: 8 });
+    if (p === '/api/config' && m === 'GET') return json(res, 200, { registration: cfg.registration, mode: cfg.regMode, pow: cfg.regMode === 'open' ? cfg.powBits : 0, announcement: cfg.announcement || '', sharing: cfg.sharingEnabled !== false, version: 8, release: RELEASE });
     if (p === '/api/metrics' && m === 'GET') {
       const auth2 = String(req.headers.authorization || '');
       if (!cfg.metricsToken || !C.safeEq(Buffer.from(auth2), Buffer.from('Bearer ' + cfg.metricsToken))) throw err(404, 'not_found', 'Nicht gefunden.');

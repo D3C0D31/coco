@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "settings": {
+    "name": "FATBASTARD",
+    "phase": "Vegetation",
+    "tankSize": 40,
+    "tankRest": 30,
+    "dailyUse": 2,
+    "lastBackup": null
+  },
+  "entries": [
+    {
+      "id": "mig-20261002",
+      "date": "2026-10-02",
+      "phase": "Vegetation",
+      "ec": 0.7,
+      "ph": 5.8,
+      "waterTemp": 22,
+      "airTemp": 24,
+      "humidity": 65,
+      "ppfd": 325,
+      "use": 1,
+      "tags": "",
+      "note": "",
+      "photo": ""
+    },
+    {
+      "id": "mig-20261003",
+      "date": "2026-10-03",
+      "phase": "Vegetation",
+      "ec": 0.8,
+      "ph": 5.8,
+      "waterTemp": 22,
+      "airTemp": 25,
+      "humidity": 65,
+      "ppfd": 350,
+      "use": 1,
+      "tags": "",
+      "note": "",
+      "photo": ""
+    }
+  ],
+  "recipes": [],
+  "events": [],
+  "reminders": [],
+  "checks": {
+    "setup": { "0": true, "1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true },
+    "week": { "0": true, "1": true, "2": true, "3": true, "4": true, "5": true, "6": true }
+  }
+}

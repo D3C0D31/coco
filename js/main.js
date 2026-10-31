@@ -219,7 +219,8 @@ async function init() {
   bindAccount();
   cloudInit().then(() => {
     const mode = new URLSearchParams(location.search).get('mode');
-    if (CLOUD.available && !CLOUD.user && ['login', 'register'].includes(mode)) {
+    if (!CLOUD.available && ['login', 'register'].includes(mode)) { renderAccount(); openDlg('accountDlg'); }
+    else if (CLOUD.available && !CLOUD.user && ['login', 'register'].includes(mode)) {
       const closed = mode === 'register' && CLOUD.registration === false;
       showTab(closed ? 'login' : mode); openDlg('accountDlg');
       if (closed) setAcctMsg('Die Registrierung ist derzeit geschlossen.', true);

@@ -249,11 +249,24 @@ function createServer(overrides = {}) {
     if (now - s.last_seen > 36e5) q.touchSession.run(now, Math.min(now + cfg.sessionDays * DAY, s.absolute_expires || Infinity), th);
     return { userId: s.user_id, dek, tokenHash: th };
   }
+  const publicHost = (() => { try { return cfg.publicUrl ? new URL(cfg.publicUrl).host.toLowerCase() : ''; } catch (e) { return ''; } })();
+  let csrfWarned = 0;
   function csrfCheck(req) {
     if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) return;
     if (req.headers['x-requested-with'] !== 'autopot') throw err(403, 'csrf', 'Anfrage abgelehnt.');
     const o = req.headers.origin;
-    if (o) { let h; try { h = new URL(o).host; } catch (e) { h = ''; } if (h !== req.headers.host) throw err(403, 'csrf', 'Anfrage abgelehnt.'); }
+    if (o) {
+      let h; try { h = new URL(o).host.toLowerCase(); } catch (e) { h = ''; }
+      /* Erlaubt: der Host der Anfrage, hinter einem Proxy der ursprüngliche Host (X-Forwarded-Host) und der Host aus PUBLIC_URL.
+         Manche Proxys (z. B. nginx ohne "proxy_set_header Host $host") schreiben den Host um – sonst schlüge jede Anmeldung fehl. */
+      const ok = new Set([String(req.headers.host || '').toLowerCase()]);
+      if (cfg.trustProxy && req.headers['x-forwarded-host']) ok.add(String(req.headers['x-forwarded-host']).split(',')[0].trim().toLowerCase());
+      if (publicHost) ok.add(publicHost);
+      if (!h || !ok.has(h)) {
+        if (Date.now() - csrfWarned > 60e3) { csrfWarned = Date.now(); console.warn(`Warnung: Anfrage von ${h || 'unbekannt'} abgelehnt, erwartet ${[...ok].join(' oder ')}. Läuft die Seite hinter einem Proxy, der den Host umschreibt? Dann PUBLIC_URL=https://${h || 'deine-domain'} setzen oder den Host-Header weitergeben (siehe DEPLOY.md).`); }
+        throw err(403, 'csrf', 'Anfrage abgelehnt: Die Adresse der Seite passt nicht zur Server-Konfiguration. Bitte dem Betreiber melden.');
+      }
+    }
     const site = req.headers['sec-fetch-site'];
     if (site && !['same-origin', 'none'].includes(site)) throw err(403, 'csrf', 'Anfrage abgelehnt.');
   }

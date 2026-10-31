@@ -273,7 +273,9 @@ async function submitAuth(kind, f) {
     if (kind === 'login') { $('liTotpWrap').classList.add('hidden'); $('liTotp').required = false; }
     if (kind === 'recover' && r.data.totpReset) toast('Die Zwei-Faktor-Anmeldung wurde zurückgesetzt. Bitte im Konto neu einrichten.', true);
     const code = r.data.recoveryCode;
+    setAcctMsg(kind === 'register' ? 'Konto angelegt, Daten werden übertragen …' : 'Angemeldet, Daten werden geladen …');
     const ok = await afterAuth(kind === 'register');
+    if (ok) setAcctMsg('');
     if (ok && code) showRecovery(code); else if (ok) { closeDlg('accountDlg'); toast('Angemeldet.'); }
   } finally { btn.disabled = false; }
 }

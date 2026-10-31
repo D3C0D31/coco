@@ -475,3 +475,26 @@ test('Team-Bereich: Rollen, 2FA-Pflicht, News, Einstellungen, Freigaben, Meldung
   const au = (await admin.call('GET', '/api/admin/audit')).data.entries.map(e => e.action);
   for (const a of ['news_publish', 'user_disable', 'settings', 'invite_create', 'share_hide']) assert.ok(au.includes(a), 'Protokoll enthält ' + a);
 });
+
+/* ---------- Proxy, der den Host umschreibt (z. B. nginx ohne "proxy_set_header Host") ---------- */
+test('Proxy: Origin wird gegen X-Forwarded-Host bzw. PUBLIC_URL geprüft', async () => {
+  const http = require('http');
+  const raw = (port, headers) => new Promise((res, rej) => {
+    const body = JSON.stringify({ email: 'proxy@example.org', password: 'falsch-falsch-1' });
+    const r = http.request({ host: '127.0.0.1', port, path: '/api/login', method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json', 'X-Requested-With': 'autopot', 'Content-Length': Buffer.byteLength(body) }, headers) }, x => { let d = ''; x.on('data', c => d += c); x.on('end', () => res({ status: x.statusCode, data: JSON.parse(d || '{}') })); });
+    r.on('error', rej); r.end(body);
+  });
+  const warn = console.warn; console.warn = () => {};
+  try {
+    const t = await tempServer({ trustProxy: true });
+    const port = t.s.address().port;
+    const rewritten = { Host: 'app:8080', Origin: 'https://grow.example.org' };
+    assert.equal((await raw(port, rewritten)).data.error, 'csrf', 'ohne Hinweis auf den echten Host abgelehnt');
+    assert.notEqual((await raw(port, Object.assign({ 'X-Forwarded-Host': 'grow.example.org' }, rewritten))).data.error, 'csrf', 'mit X-Forwarded-Host angenommen');
+    assert.equal((await raw(port, { Host: 'app:8080', Origin: 'https://evil.example', 'X-Forwarded-Host': 'grow.example.org' })).data.error, 'csrf', 'fremde Herkunft bleibt gesperrt');
+    await t.close(); t.rm();
+    const t2 = await tempServer({ publicUrl: 'https://grow.example.org' });
+    assert.notEqual((await raw(t2.s.address().port, rewritten)).data.error, 'csrf', 'mit PUBLIC_URL angenommen');
+    await t2.close(); t2.rm();
+  } finally { console.warn = warn; }
+});

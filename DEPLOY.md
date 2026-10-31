@@ -43,6 +43,23 @@ Schützt vor Überlastungsangriffen und verbirgt die Server-IP.
 5. Unter Security: „Bot Fight Mode“ an; Rate-Limiting-Regel z. B. für `/api/login` und `/api/register` (10 Anfragen/Minute pro IP).
 6. Datenschutzerklärung um Cloudflare ergänzen (Auftragsverarbeiter, Drittlandübermittlung) – Vertrag (DPA) bei Cloudflare abschließen.
 
+## 3a. Eigener Proxy statt Caddy (nginx, Apache, Plesk …)
+
+Der Server braucht vom Proxy den ursprünglichen Host und das Protokoll, sonst lehnt er Anmeldung und Registrierung mit „Anfrage abgelehnt“ ab (Schutz gegen gefälschte Anfragen von fremden Seiten). In `.env`: `TRUST_PROXY=1` und `PUBLIC_URL=https://deine-domain`. Für nginx:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    client_max_body_size 4m;
+}
+```
+
+Ohne `TRUST_PROXY=1` sehen außerdem alle Nutzer für den Server wie eine einzige IP aus – dann greifen die Limits für Registrierung und Anmeldung (`REG_PER_HOUR`, `LOGIN_PER_10MIN`) für alle gemeinsam. Bei Problemen zeigt `docker compose logs app` eine Warnung mit dem erwarteten und dem tatsächlichen Host.
+
 ## 4. Sicherungen
 
 - Der Dienst `backup` sichert täglich nach `./backups/` und macht danach automatisch eine **Wiederherstellungsprobe** (startet einen Server auf der Kopie und prüft ihn). Ergebnis: `docker compose logs backup`.

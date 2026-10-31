@@ -1,6 +1,6 @@
 /* Service Worker: macht App und Anleitung offline nutzbar (nur über http/https, nicht bei file://).
    Strategie: Netz zuerst, Cache als Rückfall (offline). Version hochzählen, wenn sich Dateien ändern. */
-const CACHE = 'autopot-1.0.0-rc.1';
+const CACHE = 'autopot-1.0.0-rc.2';
 const ASSETS = ['./', 'app.html', 'app.css', 'js/core.js', 'js/analysis.js', 'js/views.js', 'js/charts.js', 'js/tools.js', 'js/data.js', 'js/features.js', 'js/cloud.js', 'js/main.js', 'qr.js', 'theme-init.js', 'anleitung.html', 'anleitung.js', 'index.html', 'site.css', 'site.js', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'pow-worker.js', 'news.html', 'news.js', 'newsfmt.js', 'share.html', 'share.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

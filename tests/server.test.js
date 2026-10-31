@@ -249,6 +249,8 @@ test('Härtung: Content-Type, Cache, robots/security.txt, Header', async () => {
   assert.ok(etag);
   assert.equal((await fetch(base + '/app.js', { headers: { 'If-None-Match': etag } })).status, 304);
   assert.match(await (await fetch(base + '/robots.txt')).text(), /Disallow: \/api\//);
+  const fav = await fetch(base + '/favicon.ico');
+  assert.equal(fav.status, 200); assert.equal(fav.headers.get('content-type'), 'image/png');
   assert.match(await (await fetch(base + '/.well-known/security.txt')).text(), /Contact:/);
   assert.equal((await fetch(base + '/' + 'x'.repeat(3000))).status, 414);
   const h = (await fetch(base + '/')).headers;
@@ -332,12 +334,14 @@ test('Verwaltung: Statistik, Suche, Sperren, Löschen', async () => {
   let cookie = '';
   const r = await fetch(t.b + '/api/register', { method: 'POST', headers: H, body: JSON.stringify({ email: 'adm@example.org', password: PW, adult: true, terms: true }) });
   cookie = r.headers.get('set-cookie').split(';')[0];
+  const recCode = (await r.json()).recoveryCode;
   const me = () => fetch(t.b + '/api/me', { headers: { Cookie: cookie } }).then(x => x.status);
   assert.equal(await me(), 200);
   assert.match(cli(t.d, 'admin.js', 'stats'), /Konten:\s+1/);
   const id = /Nutzer-ID (\d+)/.exec(cli(t.d, 'admin.js', 'find', 'ADM@example.org'))[1];
   assert.match(cli(t.d, 'admin.js', 'users'), /1 Konto/);
   cli(t.d, 'admin.js', 'disable', id);
+  assert.equal((await t.call('POST', '/api/recover', { email: 'adm@example.org', recoveryCode: recCode, newPassword: 'Neues-Kennwort-99' })).data.error, 'disabled', 'gesperrtes Konto kann sich nicht per Wiederherstellung zurückholen');
   assert.equal(await me(), 401, 'gesperrtes Konto verliert die Sitzung');
   assert.equal((await t.call('POST', '/api/login', { email: 'adm@example.org', password: PW })).data.error, 'disabled');
   cli(t.d, 'admin.js', 'enable', id);

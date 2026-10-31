@@ -125,7 +125,7 @@
     </div>
   </div>
   <div class="head">
-    <div class="form" style="grid-template-columns:minmax(140px,2fr) minmax(130px,1fr) auto;align-items:end;flex:1">
+    <div class="form filterform">
       <div><label for="lSearch">Suche</label><input id="lSearch" type="search" placeholder="Notiz, Tag, Datum …"></div>
       <div><label for="lPhase">Phase</label><select id="lPhase"></select></div>
       <label class="check" style="padding:0 0 9px;border:0"><input id="lPhoto" type="checkbox"><span>nur mit Foto</span></label>
@@ -175,7 +175,7 @@
 
 <section id="calc">
   <h2>Rechner</h2>
-  <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
+  <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))">
     <div class="card"><h3>VPD</h3>
       <label for="vTemp">Lufttemperatur °C</label><input id="vTemp" type="number" step="0.1" value="25">
       <label for="vRh">Luftfeuchte %</label><input id="vRh" type="number" step="1" value="60">
@@ -240,7 +240,7 @@
   <div class="head" style="margin-top:20px"><h3 style="margin:0">Nährstoff-Lexikon</h3>
     <div style="min-width:220px"><label for="nutriSearch" class="hidden">Nährstoffe durchsuchen</label><input id="nutriSearch" type="search" placeholder="Suchen, z. B. „gelb“, „Spitzen“ …"></div></div>
   <p class="sub" style="margin:0 0 10px">Viele „Mängel“ in Coco sind in Wahrheit ein pH-Problem: Erst Tank-pH (5,8–6,2) und EC prüfen, dann gezielt nachbessern. Der Diagnose-Assistent hilft bei der Eingrenzung.</p>
-  <div id="nutriList" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))"></div>
+  <div id="nutriList" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))"></div>
   <h3 style="margin-top:20px">Glossar</h3>
   <dl id="glossar" class="glossar"></dl>
 </section>
@@ -312,14 +312,14 @@
 <section id="diagnose">
   <h2>Diagnose-Assistent</h2>
   <p class="sub" style="margin-bottom:8px">Wähle alle beobachteten Symptome. Die Ursachen werden nach Trefferzahl sortiert. Ein einzelnes Blatt ist kein Beweis: Verlauf beobachten.</p>
-  <div id="symptoms" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))"></div>
+  <div id="symptoms" class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))"></div>
   <div class="row"><button id="diagBtn" class="btn primary" type="button">Diagnose starten</button><button id="diagReset" class="btn" type="button">Zurücksetzen</button></div>
   <div id="diagOut"></div>
 </section>
 
 <section id="checks">
   <h2>Checklisten</h2>
-  <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+  <div class="grid cards" style="grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr))">
     <div class="card"><h3>Montage</h3><div id="setupList"></div></div>
     <div class="card"><h3>Wöchentlich</h3><div id="weekList"></div><div class="row"><button id="weekReset" class="btn small" type="button">Woche zurücksetzen</button></div></div>
   </div>
@@ -451,6 +451,7 @@
       </details>
       <details class="acct-det"><summary>Konto löschen</summary>
         <form id="delForm" class="acct-form">
+          <input name="u" type="text" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
           <p class="sub" style="margin:0">Löscht dein Konto und alle Cloud-Daten (auch Fotos) unwiderruflich.</p>
           <div><label for="delPw">Passwort zur Bestätigung</label><input id="delPw" name="password" type="password" autocomplete="current-password" required maxlength="200"></div>
           <div id="delCodeWrap" class="hidden"><label for="delCode">Code aus der Authenticator-App</label><input id="delCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7"></div>

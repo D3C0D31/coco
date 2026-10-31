@@ -9,6 +9,7 @@ function openDb(dir) {
   const db = new DatabaseSync(path.join(dir, 'autopot.sqlite'));
   db.exec(`
     PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
     PRAGMA foreign_keys = ON;
     PRAGMA secure_delete = ON;
     CREATE TABLE IF NOT EXISTS users (

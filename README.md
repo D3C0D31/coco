@@ -121,9 +121,9 @@ npm install            # nur für die Browser-Tests (Playwright)
 npm test               # Server-Tests, App-Tests, End-to-End mit zwei Geräten
 ```
 
-- `tests/server.test.js` (20) – Bot-Schutz, Altersbestätigung, Einladungen, Verwaltungswerkzeug, Kontingent, gesperrte Konten, dauerhafte Sperren, Metriken, Wiederherstellungsprobe, Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
-- `tests/smoke.test.js` (102) – App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
-- `tests/e2e.test.js` (43) – Löschungen über Geräte hinweg, Einladungsmodus, Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
+- `tests/server.test.js` (20 Testgruppen) – Bot-Schutz, Altersbestätigung, Einladungen, Verwaltungswerkzeug, Kontingent, gesperrte Konten, dauerhafte Sperren, Metriken, Wiederherstellungsprobe, Registrierung, Login, Sperre pro Konto+IP, Verschlüsselung in der Datenbankdatei, Trennung der Nutzer, CSRF, Dateifreigabe, Passwortwechsel, Wiederherstellung, Zwei-Faktor (inkl. RFC-Testvektoren und Replay-Schutz), Geräte, Protokoll, Härtung, Backup-Skript, Export, Löschen
+- `tests/smoke.test.js` (110) – Überlauf-Prüfung bis 320 px, Eingabeprüfung, App und Anleitung (Import/Export, verschlüsseltes Backup, Fotos, Diagramme, Rechner, Stromkosten, Wochenbericht, Ernteprognose, Rückgängig, Wissen, Offline, Mobilansicht)
+- `tests/e2e.test.js` (45) – Abmelden offline, Altbestände, Löschungen über Geräte hinweg, Einladungsmodus, Landingpage, Registrierung im Browser, Sync von Einträgen und Fotos zwischen zwei Geräten, Zusammenführen, Geräte abmelden, Sicherheitsprotokoll, Passwortwechsel, Zwei-Faktor im Browser (QR-Code wird mit OpenCV gegengelesen, falls vorhanden), Abmelden, Konto löschen
 
 - `tests/load.js` – Lasttest (`npm run test:load`). Ergebnis auf 2 CPU-Kernen: ~1 500 Anfragen/s an die Daten-API (p95 56 ms, keine Fehler), 40 gleichzeitige Logins in 1,3 s, ~265 MB RAM.
 

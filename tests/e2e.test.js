@@ -121,8 +121,10 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   await a.check('#recoveryOk'); await a.click('#recoveryDone');
 
   /* ---------- Abmelden löscht lokale Daten, Login holt sie zurück ---------- */
+  await a.evaluate(() => localStorage.setItem('autopot-entries', JSON.stringify([{ date: '2026-01-01', ec: 1, note: 'ALT-LEGACY-DATEN' }])));
   await a.click('#accountBtn'); await a.click('#logoutBtn');
   ok(await waitFor(async () => (await a.textContent('#logBody')).includes('Noch keine Einträge') && !(await a.evaluate(() => document.getElementById('accountDlg').open))), 'Abmelden: lokale Daten entfernt');
+  ok(!(await a.textContent('#logBody')).includes('ALT-LEGACY-DATEN'), 'Abmelden: Altbestände werden nicht wieder eingelesen');
   ok(await waitFor(async () => a.evaluate(() => { const st = JSON.parse(localStorage.getItem('autopot-app-v3') || '{}'); return (st.entries || []).length === 0 && !localStorage.getItem('autopot-sync') && !localStorage.getItem('autopot-app-v3-prev'); })), 'Abmelden: Speicher geleert (keine Einträge, keine Sync-Daten)');
   await a.click('#accountBtn'); await a.fill('#liEmail', EMAIL); await a.fill('#liPw', PW);
   await a.click('#loginForm button[type=submit]');
@@ -161,6 +163,10 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   const step = T.currentStep();
   await d.fill('#tfaCode', T.code(secret, step)); await d.click('#tfaEnableForm button[type=submit]');
   ok(await waitFor(async () => (await d.textContent('#tfaState')).includes('aktiv')), '2FA: im Browser aktiviert');
+  await D.ctx.setOffline(true);
+  await d.click('#logoutBtn');
+  ok(await waitFor(async () => (await d.textContent('#toast')).includes('ohne Internetverbindung')), 'Abmelden offline wird verhindert (Sitzung bliebe sonst gültig)');
+  await D.ctx.setOffline(false);
   await d.click('#logoutBtn');
   await waitFor(async () => (await d.textContent('#logBody')).includes('Noch keine') && !(await d.evaluate(() => document.getElementById('accountDlg').open)));
   await d.click('#accountBtn'); await d.fill('#liEmail', 'zwei@example.org'); await d.fill('#liPw', 'Sicheres-Kennwort-2026!');
@@ -195,7 +201,7 @@ const waitFor = async (fn, ms = 12000) => { const t = Date.now(); while (Date.no
   ok(await waitFor(async () => !(await C.page.locator('a[data-needs-reg]').first().isVisible())), 'Geschlossene Registrierung: Knöpfe auf der Landingpage verschwinden');
   closed.close();
 
-  const real = errors.filter(e => !/401|403|409|429/.test(e)); /* erwartete Ablehnungen aus den Tests */
+  const real = errors.filter(e => !/401|403|409|429|ERR_INTERNET_DISCONNECTED/.test(e)); /* erwartete Ablehnungen aus den Tests */
   ok(real.length === 0, 'Keine JS-/Konsolenfehler' + (real.length ? ': ' + real.slice(0, 4).join(' | ') : ''));
   await browser.close();
   fs.rmSync(dir, { recursive: true, force: true });

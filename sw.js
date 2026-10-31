@@ -1,6 +1,6 @@
 /* Service Worker: macht App und Anleitung offline nutzbar (nur über http/https, nicht bei file://).
-   Strategie: Cache zuerst, im Hintergrund aktualisieren. Version hochzählen, wenn sich Dateien ändern. */
-const CACHE = 'autopot-v7-1';
+   Strategie: Netz zuerst, Cache als Rückfall (offline). Version hochzählen, wenn sich Dateien ändern. */
+const CACHE = 'autopot-v7-2';
 const ASSETS = ['./', 'app.html', 'app.css', 'app.js', 'qr.js', 'theme-init.js', 'anleitung.html', 'anleitung.js', 'index.html', 'site.css', 'site.js', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'pow-worker.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -20,15 +20,18 @@ self.addEventListener('fetch', e => {
   const u = new URL(req.url);
   /* API-Antworten (Konto, verschlüsselte Daten) werden nie zwischengespeichert */
   if (req.method !== 'GET' || u.origin !== self.location.origin || u.pathname.startsWith('/api/')) return;
-  e.respondWith(
-    caches.open(CACHE).then(cache =>
-      cache.match(req, { ignoreSearch: true }).then(hit => {
-        const net = fetch(req).then(res => {
-          if (res && res.ok) cache.put(req, res.clone());
-          return res;
-        }).catch(() => hit || (req.mode === 'navigate' ? cache.match('app.html') : undefined));
-        return hit || net;
-      })
-    )
-  );
+  /* Netz zuerst – so kommen Updates sofort an. Offline oder nach 4 s ohne Antwort: Version aus dem Cache. */
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const res = await Promise.race([fetch(req), new Promise((_, rej) => setTimeout(() => rej(new Error('Zeitüberschreitung')), 4000))]);
+      if (res && res.ok && res.type === 'basic') cache.put(req, res.clone());
+      return res;
+    } catch (err) {
+      const hit = await cache.match(req, { ignoreSearch: true });
+      if (hit) return hit;
+      if (req.mode === 'navigate') { const app = await cache.match('app.html'); if (app) return app; }
+      return Response.error();
+    }
+  })());
 });

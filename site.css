@@ -49,13 +49,13 @@ section.block{padding:84px 0}
 h2.title{margin:0 0 14px;font-size:clamp(28px,4.5vw,44px);line-height:1.1;letter-spacing:-.03em}
 .sub{max-width:640px;margin:0 0 40px;color:var(--muted);font-size:18px}
 .center{text-align:center}.center .sub{margin-left:auto;margin-right:auto}
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}
 .card{padding:24px;background:var(--glass);border:1px solid var(--border);border-radius:22px;backdrop-filter:blur(10px);transition:transform .2s,border-color .2s,box-shadow .2s}
 .card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--green) 50%,var(--border));box-shadow:0 14px 40px var(--glow)}
 .card .ic{display:grid;place-items:center;width:46px;height:46px;margin-bottom:14px;font-size:23px;background:var(--green-light);border-radius:14px}
 .card h3{margin:0 0 6px;color:var(--text);font-size:18px}
 .card p{margin:0;color:var(--muted);font-size:15px}
-.steps{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));counter-reset:s}
+.steps{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));counter-reset:s}
 .step{position:relative;padding:28px 24px 24px;background:var(--glass);border:1px solid var(--border);border-radius:22px;counter-increment:s}
 .step::before{content:counter(s);display:grid;place-items:center;width:38px;height:38px;margin-bottom:14px;color:var(--on-accent);font-weight:900;background:var(--grad);border-radius:12px}
 .step h3{margin:0 0 6px;font-size:18px}.step p{margin:0;color:var(--muted);font-size:15px}
@@ -109,3 +109,7 @@ footer{padding:40px 0 60px;color:var(--muted);font-size:14px;border-top:1px soli
   .final{background:var(--surface2)}
   .honest{border-color:var(--orange)}
 }
+@media(max-width:380px){.brand .bt{display:none}.nav-cta .btn{padding:8px 12px}}
+.legal{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}
+.legal h1{font-size:clamp(26px,7vw,44px)}
+h1,h2,h3{overflow-wrap:break-word;-webkit-hyphens:auto;hyphens:auto}

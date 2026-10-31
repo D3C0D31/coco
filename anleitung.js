@@ -12,11 +12,11 @@
             if (t) return t === 'dark';
             return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
         }
-        function label() { btn.textContent = isDark() ? '☀️ Light Mode' : '🌙 Dark Mode'; }
+        function label() { btn.textContent = isDark() ? '☀️ Hell' : '🌙 Dunkel'; }
         btn.addEventListener('click', function () {
             var next = isDark() ? 'light' : 'dark';
             root.setAttribute('data-theme', next);
-            try { localStorage.setItem('autopot-guide-theme', next); } catch (e) {}
+            try { localStorage.setItem('autopot-theme', next); localStorage.removeItem('autopot-guide-theme'); } catch (e) {}
             label();
         });
         label();

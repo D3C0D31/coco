@@ -17,7 +17,7 @@ const { chromium } = playwright;
 
 const ROOT = path.join(__dirname, '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'autopot-test-'));
-const TYPES = { '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.csv': 'text/csv' };
+const TYPES = { '.css': 'text/css', '.jpg': 'image/jpeg', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.svg': 'image/svg+xml', '.csv': 'text/csv' };
 
 function serve() {
   const srv = http.createServer((req, res) => {
@@ -307,7 +307,11 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
   const iso6 = off => page.evaluate(o => { const d = new Date(); d.setDate(d.getDate() + o); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }, off);
   await page.fill('#fDate', await iso6(-8)); await page.fill('#fEc', '1.2'); await page.fill('#fPh', '6.0'); await page.fill('#fAir', '25'); await page.fill('#fRh', '60'); await page.fill('#fHeight', '10'); await page.fill('#fNote', 'Geheime-Notiz-77');
   await page.click('#saveEntry'); await page.waitForTimeout(150);
-  await page.fill('#fDate', await iso6(0));
+  await page.fill('#fDate', await iso6(0)); await page.fill('#fEc', '-1'); await page.click('#saveEntry');
+  ok((await toastText()).includes('nicht negativ') && (await rowsCount()) === 1, 'v8: negative Messwerte werden abgelehnt');
+  await page.fill('#fEc', '1500'); await page.click('#saveEntry');
+  ok((await toastText()).includes('Einheit prüfen') && (await rowsCount()) === 1, 'v8: EC in falscher Einheit (µS) wird erkannt');
+  await page.fill('#fEc', '');
   await page.click('#fillLast');
   ok((await page.inputValue('#fEc')) === '1.2' && (await page.inputValue('#fHeight')) === '10' && (await page.inputValue('#fNote')) === '', 'v6: „Letzte Werte übernehmen“ füllt Messwerte, nicht die Notiz');
   await page.fill('#fEc', '1.4'); await page.fill('#fHeight', '15');
@@ -347,9 +351,14 @@ const ok = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!
 
   /* ---------- Mobil & Direktstart ohne Server ---------- */
   await page.goto(base + '/app.html'); await page.waitForSelector('#logBody');
-  await page.setViewportSize({ width: 380, height: 800 });
+  await page.setViewportSize({ width: 375, height: 740 });
   await page.waitForTimeout(300);
   ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2)), 'Mobil: kein horizontaler Seitenüberlauf');
+  await page.setViewportSize({ width: 320, height: 640 });
+  for (const pg of ['/app.html', '/', '/anleitung.html', '/datenschutz.html', '/impressum.html', '/nutzungsbedingungen.html']) {
+    await page.goto(base + pg); await page.waitForTimeout(250);
+    ok(!(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)), 'Kleinstes Handy (320 px): kein Überlauf auf ' + pg);
+  }
   await page.setViewportSize({ width: 1200, height: 900 });
   const filePage = await ctx.newPage();
   const fileErrors = [];

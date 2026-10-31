@@ -353,6 +353,7 @@ function createServer(overrides = {}) {
       const recRow = user || await dummyRow;
       const dek = await kdf(() => C.unlockWithRecovery(recRow, str(b.recoveryCode, 80)));
       if (!user || !dek) { failed('rec:' + eh, 8); throw err(401, 'bad_recovery', 'E-Mail oder Wiederherstellungscode ist falsch.'); }
+      if (user.disabled) throw err(403, 'disabled', 'Dieses Konto ist gesperrt. Bitte wende dich an den Betreiber.');
       const nw = await kdf(() => C.rewrap(dek, b.newPassword)), r = nw.row;
       q.updUser.run(r.salt, r.verifier, r.wrap_dek, r.rec_salt, r.wrap_dek_rec, user.id);
       const had2fa = !!user.totp_wrapped;
@@ -518,7 +519,7 @@ function createServer(overrides = {}) {
   const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.txt': 'text/plain; charset=utf-8' };
   const PUBLIC = new Set(['index.html', 'app.html', 'anleitung.html', 'datenschutz.html', 'impressum.html', 'nutzungsbedingungen.html', 'app.js', 'app.css', 'qr.js', 'pow-worker.js', 'anleitung.js', 'theme-init.js', 'site.css', 'site.js', 'sw.js', 'robots.txt', '.well-known/security.txt',
     'img/preview-dark.jpg', 'img/preview-light.jpg', 'img/preview-mobile.jpg', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png']);
-  const ALIASES = { '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html', '/nutzungsbedingungen': 'nutzungsbedingungen.html' };
+  const ALIASES = { '/favicon.ico': 'icons/icon-192.png', '/': 'index.html', '/app': 'app.html', '/anleitung': 'anleitung.html', '/datenschutz': 'datenschutz.html', '/impressum': 'impressum.html', '/nutzungsbedingungen': 'nutzungsbedingungen.html' };
   const fcache = new Map();
   function serveStatic(req, res, pathname) {
     if (!['GET', 'HEAD'].includes(req.method)) throw err(405, 'method', 'Methode nicht erlaubt.');

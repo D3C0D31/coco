@@ -16,6 +16,7 @@ fs.mkdirSync(target, { recursive: true, mode: 0o700 });
 const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const out = path.join(target, `autopot-${stamp}.sqlite`);
 const db = new DatabaseSync(src);
+db.exec('PRAGMA busy_timeout = 10000');
 db.exec(`VACUUM INTO '${out.replace(/'/g, "''")}'`);
 db.close();
 fs.chmodSync(out, 0o600);

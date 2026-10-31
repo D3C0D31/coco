@@ -366,7 +366,7 @@ function renderHero() {
     $('heroDay').textContent = 'Noch kein Start';
     $('heroSub').textContent = 'Trage unten ein Startdatum ein, dann zählt die App Tage und Wochen.';
   }
-  const fi = flowerInfo();
+  const fi = PHASES.indexOf(S.settings.phase) >= 2 ? flowerInfo() : null;
   $('heroFlower').textContent = fi ? (fi.left > 0 ? `🌸 Blütewoche ${fi.week} von ${fi.weeks} · Ernte ca. ab ${fmtDate(fi.harvest)} (noch ${fi.left} Tage)` : `🌾 Erntefenster erreicht (geplant ab ${fmtDate(fi.harvest)}) – Reife an den Trichomen prüfen`) : (PHASES.indexOf(S.settings.phase) < 2 ? `Blüte noch nicht gestartet · Blütedauer laut Sorte: ${S.settings.flowerWeeks} Wochen` : 'Blütebeginn im Bereich „Aktueller Grow“ eintragen, dann berechnet die App den Erntetermin.');
   const idx = PHASES.indexOf(S.settings.phase);
   $('phaseSteps').innerHTML = PHASES.map((p, i) => `<li class="${i < idx ? 'done' : i === idx ? 'now' : ''}"${i === idx ? ' aria-current="step"' : ''}><span title="${esc(p)}">${PH_SHORT[i]}</span></li>`).join('');
@@ -507,12 +507,22 @@ function drawChart(cfg, hover) {
     }
   }
   const P = pts.map(p => ({ x: px(p.t), y: py(p.v) }));
+  /* Monotone kubische Interpolation (Fritsch-Carlson): Linie geht exakt durch jeden Messpunkt und schießt nicht über */
+  const n = P.length, dxs = [], ms = [], tg = new Array(n).fill(0);
+  for (let i = 0; i < n - 1; i++) { dxs[i] = P[i + 1].x - P[i].x; ms[i] = dxs[i] > 0 ? (P[i + 1].y - P[i].y) / dxs[i] : 0; }
+  if (n > 1) { tg[0] = ms[0]; tg[n - 1] = ms[n - 2]; }
+  for (let i = 1; i < n - 1; i++) tg[i] = ms[i - 1] * ms[i] <= 0 ? 0 : (ms[i - 1] + ms[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (ms[i] === 0) { tg[i] = 0; tg[i + 1] = 0; continue; }
+    const a = tg[i] / ms[i], b = tg[i + 1] / ms[i], q = a * a + b * b;
+    if (q > 9) { const tau = 3 / Math.sqrt(q); tg[i] = tau * a * ms[i]; tg[i + 1] = tau * b * ms[i]; }
+  }
   const trace = () => {
     x.moveTo(P[0].x, P[0].y);
-    if (P.length === 2) x.lineTo(P[1].x, P[1].y);
-    else if (P.length > 2) {
-      for (let i = 1; i < P.length - 1; i++) x.quadraticCurveTo(P[i].x, P[i].y, (P[i].x + P[i + 1].x) / 2, (P[i].y + P[i + 1].y) / 2);
-      x.lineTo(P[P.length - 1].x, P[P.length - 1].y);
+    for (let i = 0; i < n - 1; i++) {
+      const d = dxs[i];
+      if (d <= 0) x.lineTo(P[i + 1].x, P[i + 1].y);
+      else x.bezierCurveTo(P[i].x + d / 3, P[i].y + tg[i] * d / 3, P[i + 1].x - d / 3, P[i + 1].y - tg[i + 1] * d / 3, P[i + 1].x, P[i + 1].y);
     }
   };
   if (P.length > 1) {
@@ -794,6 +804,10 @@ async function saveEntry() {
   const e = normEntry(Object.assign({ id: editingId || uid(), date, phase: $('fPhase').value, tags: $('fTags').value.trim(), note: $('fNote').value.trim() }, raw));
   if (!e) { toast('Ungültiges Datum.', true); return; }
   if (e.ph != null && (e.ph < 0 || e.ph > 14)) { toast('pH muss zwischen 0 und 14 liegen.', true); return; }
+  const neg = [['EC', e.ec], ['PPFD', e.ppfd], ['Verbrauch', e.use], ['Höhe', e.height]].find(([, v]) => v != null && v < 0);
+  if (neg) { toast(`${neg[0]} darf nicht negativ sein.`, true); return; }
+  if (e.ec != null && e.ec > 10) { toast('EC über 10 ist unrealistisch – bitte Einheit prüfen (mS/cm, nicht µS oder PPM).', true); return; }
+  if ([e.airTemp, e.waterTemp].some(v => v != null && (v < -10 || v > 60))) { toast('Temperatur bitte in °C zwischen −10 und 60 angeben.', true); return; }
   if (e.humidity != null && (e.humidity < 0 || e.humidity > 100)) { toast('Luftfeuchte muss zwischen 0 und 100 % liegen.', true); return; }
   if ([e.ec, e.ph, e.waterTemp, e.airTemp, e.humidity, e.ppfd, e.use, e.height].every(v => v == null) && !e.note && !pendingPhoto) { toast('Bitte mindestens einen Messwert, eine Notiz oder ein Foto eintragen.', true); return; }
   const prior = S.entries.find(x => x.id === e.id);
@@ -1195,6 +1209,12 @@ const SYNC_KEY = 'autopot-sync';
 const readSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
 const writeSync = o => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(o)); } catch (e) { /* ignore */ } };
 const PHOTO_ID_OK = id => /^[A-Za-z0-9_-]{1,40}$/.test(id);
+/* Ältere importierte Einträge können IDs mit Sonderzeichen haben – für die Cloud wird daraus eine stabile, gültige ID */
+function cloudPhotoId(id) {
+  if (PHOTO_ID_OK(id)) return id;
+  let h = 0x811c9dc5; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return 'x' + h.toString(36) + id.length.toString(36);
+}
 
 async function cloudApi(method, url, body) {
   let res;
@@ -1264,6 +1284,7 @@ async function cloudPush(retry) {
   const r = await cloudApi('PUT', '/api/state', { baseVersion: meta.version || 0, data: JSON.parse(ser(S)) });
   if (r.status === 0) { setSyncStatus('offline'); return false; }
   if (r.status === 409 && !retry) { CLOUD.dirty = true; if (!(await cloudPull(true))) return false; writeSync(Object.assign(readSync(), { version: r.data.version })); return cloudPush(true); }
+  if (r.status === 413 && !CLOUD.quotaWarned) { CLOUD.quotaWarned = true; toast((r.data && r.data.message) || 'Dein Speicherplatz ist voll.', true); }
   if (!r.ok) { setSyncStatus(r.status === 401 ? 'expired' : 'error'); return false; }
   writeSync(Object.assign(readSync(), { version: r.data.version, dirty: false }));
   CLOUD.dirty = false;
@@ -1271,12 +1292,14 @@ async function cloudPush(retry) {
 }
 async function pushPhotos() {
   const meta = readSync(), up = new Set(meta.photos || []);
-  const want = new Set(S.entries.filter(e => e.hasPhoto && PHOTO_ID_OK(e.id)).map(e => e.id));
-  for (const id of want) {
-    if (up.has(id) || !photoCache.has(id)) continue;
-    const r = await cloudApi('PUT', '/api/photos/' + id, { data: photoCache.get(id) });
+  const local = new Map(S.entries.filter(e => e.hasPhoto).map(e => [cloudPhotoId(e.id), e.id]));
+  const want = new Set(local.keys());
+  for (const [cid, id] of local) {
+    if (up.has(cid) || !photoCache.has(id)) continue;
+    const r = await cloudApi('PUT', '/api/photos/' + cid, { data: photoCache.get(id) });
     if (r.status === 0) { setSyncStatus('offline'); return false; }
-    if (r.ok) up.add(id);
+    if (r.status === 413) { if (!CLOUD.quotaWarned) { CLOUD.quotaWarned = true; toast((r.data && r.data.message) || 'Speicherplatz voll – Fotos werden nicht mehr hochgeladen.', true); } break; }
+    if (r.ok) up.add(cid);
   }
   for (const id of [...up]) {
     if (want.has(id)) continue;
@@ -1293,10 +1316,11 @@ async function pullPhotos() {
   const have = new Set(list.data.ids), meta = readSync(), up = new Set(meta.photos || []);
   let got = 0;
   for (const e of S.entries) {
-    if (!e.hasPhoto || photoCache.has(e.id) || !have.has(e.id)) continue;
-    const r = await cloudApi('GET', '/api/photos/' + e.id);
+    const cid = cloudPhotoId(e.id);
+    if (!e.hasPhoto || photoCache.has(e.id) || !have.has(cid)) continue;
+    const r = await cloudApi('GET', '/api/photos/' + cid);
     if (r.ok && typeof r.data.data === 'string' && IMG_RE.test(r.data.data)) {
-      photoCache.set(e.id, r.data.data); up.add(e.id); got++;
+      photoCache.set(e.id, r.data.data); up.add(cid); got++;
       if (idb) { try { await idbRun('readwrite', s => s.put(r.data.data, e.id)); } catch (err) { /* nur im Speicher */ } }
     }
   }
@@ -1327,7 +1351,8 @@ function scheduleSync(delay = 1500) {
 
 async function wipeLocal() {
   ['', '-prev'].forEach(x => { try { localStorage.removeItem(KEY + x); } catch (e) { /* ignore */ } });
-  try { localStorage.removeItem(SYNC_KEY); localStorage.removeItem('autopot-range'); } catch (e) { /* ignore */ }
+  /* auch Altbestände entfernen – sonst würde load() sie beim nächsten Start wieder übernehmen */
+  [SYNC_KEY, 'autopot-range', 'autopot-email', 'autopot-entries', 'autopot-setup', 'autopot-week', 'autopot-settings', 'growcc-v2'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } });
   photoCache.clear();
   if (idb) { try { await idbRun('readwrite', s => s.clear()); } catch (e) { /* ignore */ } }
   S = blank();
@@ -1451,9 +1476,13 @@ async function submitAuth(kind, f) {
 }
 async function cloudLogout() {
   if (CLOUD.dirty) await cloudSync();
-  await cloudApi('POST', '/api/logout');
+  const unsynced = CLOUD.dirty;
+  const r = await cloudApi('POST', '/api/logout');
+  /* Ohne Verbindung bliebe die Sitzung auf dem Server gültig – dann lieber gar nicht abmelden */
+  if (r.status === 0) { toast('Abmelden ist ohne Internetverbindung nicht möglich. Bitte später erneut versuchen.', true); return; }
   CLOUD.user = null; setSyncStatus('off');
-  if (confirm('Lokale Daten auf diesem Gerät entfernen?\n\nOK: Alles wird von diesem Gerät gelöscht (empfohlen auf fremden oder gemeinsam genutzten Geräten). Deine Daten bleiben in der Cloud.\nAbbrechen: Daten bleiben lokal erhalten.')) { await wipeLocal(); location.replace(location.pathname); return; }
+  const warn = unsynced ? '\n\nACHTUNG: Es gibt Änderungen, die noch nicht in der Cloud sind. Beim Entfernen gehen sie verloren – vorher ein Backup speichern!' : '';
+  if (confirm('Lokale Daten auf diesem Gerät entfernen?\n\nOK: Alles wird von diesem Gerät gelöscht (empfohlen auf fremden oder gemeinsam genutzten Geräten). Deine Daten bleiben in der Cloud.\nAbbrechen: Daten bleiben lokal erhalten.' + warn)) { await wipeLocal(); location.replace(location.pathname); return; }
   renderAccount(); closeDlg('accountDlg'); toast('Abgemeldet.');
 }
 async function cloudExport() {
@@ -1770,7 +1799,11 @@ async function init() {
   bindAccount();
   cloudInit().then(() => {
     const mode = new URLSearchParams(location.search).get('mode');
-    if (CLOUD.available && !CLOUD.user && ['login', 'register'].includes(mode)) { showTab(mode); openDlg('accountDlg'); }
+    if (CLOUD.available && !CLOUD.user && ['login', 'register'].includes(mode)) {
+      const closed = mode === 'register' && CLOUD.registration === false;
+      showTab(closed ? 'login' : mode); openDlg('accountDlg');
+      if (closed) setAcctMsg('Die Registrierung ist derzeit geschlossen.', true);
+    }
   });
 
   /* Offline-Nutzung (nur über http/https, nicht bei file://) */
